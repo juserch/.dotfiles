@@ -1,0 +1,18 @@
+[user]
+	name = JuneQ Cheung
+	email = a1624jz@aiit.ac.jp
+
+# [credential]
+#	helper = 
+
+[ghq]
+	root = ~/xvar/xghq
+	root = ~/xvar/xgo/src
+[core]
+	longpaths = true
+	quotepath = false
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge --skip -- %f
+	process = git-lfs filter-process --skip
+	required = true
