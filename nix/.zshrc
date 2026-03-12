@@ -112,8 +112,7 @@ eval "$(zoxide init zsh)"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 alias zshconfig="vi ~/.zshrc"
 alias zshreload="source ~/.zshrc"
-alias claude="claude --dangerously-skip-permissions"
-alias cc="claude"
+alias cc="claude --dangerously-skip-permissions"
 alias code="code ."
 
 # My config
