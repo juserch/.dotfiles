@@ -70,6 +70,7 @@ if [[ -n "$ZSH_VERSION" ]]; then
 elif [[ -n "$BASH_VERSION" ]]; then
   nvm() { unset -f nvm; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm "$@"; }
 fi
+nvm --version > /dev/null
 
 # ---------- ghq ----------
 alias ghqget="ghq get"
