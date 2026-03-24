@@ -1,7 +1,1 @@
-# Setup fzf
-# ---------
-if [[ ! "$PATH" == *$HOME/.fzf/bin* ]]; then
-  PATH="$HOME/.fzf/bin${PATH:+:${PATH}}"
-fi
-
-source <(fzf --zsh)
+# fzf configuration managed in .chrc

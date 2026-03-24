@@ -11,6 +11,12 @@
 [core]
 	longpaths = true
 	quotepath = false
+[pull]
+	rebase = true
+[init]
+	defaultBranch = main
+[diff]
+	algorithm = histogram
 [filter "lfs"]
 	clean = cat
 	smudge = cat

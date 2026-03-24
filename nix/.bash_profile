@@ -1,6 +1,2 @@
-export PYENV_ROOT=$HOME/.pyenv
-export PATH=$PYENV_ROOT/bin:$PATH
-eval "$(pyenv init -)"
-eval "$(pyenv virtualenv-init -)"
-. "$HOME/.cargo/env"
-. "$HOME/.deno/env"
+# Login shell: just source .bashrc
+[[ -f ~/.bashrc ]] && source ~/.bashrc

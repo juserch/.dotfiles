@@ -1,28 +1,33 @@
-# chrc file
+# chrc - shared shell config (bash/zsh)
 
-# PATH
-export PATH=$HOME/.chlocal/bin:$PATH
+# ---------- PATH ----------
+export PATH=$HOME/.local/bin:$HOME/.chlocal/bin:$PATH
 
-# hh
-export HISTFILE=~/.zsh_history  # ensure history file visibility
-export HH_CONFIG=hicolor        # get more colors
+# ---------- History ----------
+export HH_CONFIG=hicolor
+[[ -n "$ZSH_VERSION" ]] && export HISTFILE=~/.zsh_history
 
-# fzf
+# ---------- fzf ----------
 if [[ ! "$PATH" == */.fzf/bin* ]]; then
   PATH="$HOME/.fzf/bin${PATH:+:${PATH}}"
 fi
-# reload keybindings after zsh-vi-mode init to avoid conflict
-_chrc_after_vi_init() {
-  source <(fzf --zsh)
-  # restore history-substring-search bindings overridden by zsh-vi-mode
-  bindkey -M vicmd 'k' history-substring-search-up
-  bindkey -M vicmd 'j' history-substring-search-down
-  bindkey '^[[A' history-substring-search-up
-  bindkey '^[[B' history-substring-search-down
-}
-zvm_after_init_commands+=(_chrc_after_vi_init)
+if [[ -n "$ZSH_VERSION" ]]; then
+  # reload keybindings after zsh-vi-mode init to avoid conflict
+  _chrc_after_vi_init() {
+    source <(fzf --zsh)
+    bindkey -M vicmd 'k' history-substring-search-up
+    bindkey -M vicmd 'j' history-substring-search-down
+    bindkey '^[[A' history-substring-search-up
+    bindkey '^[[B' history-substring-search-down
+  }
+  zvm_after_init_commands+=(_chrc_after_vi_init)
+elif [[ -n "$BASH_VERSION" ]]; then
+  eval "$(fzf --bash)"
+fi
 
-# alias
+# ---------- Aliases ----------
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
 alias ll="ls -lh"
 alias la="ls -lAh"
 alias lt="ls -lrtAh"
@@ -32,87 +37,96 @@ alias ff="find . -type f | fzf"
 alias fh="history | fzf"
 alias fe="env | fzf"
 alias fp="ps -ef | fzf"
-alias fs="ss -anpoim |fzf"
+alias fs="ss -anpoim | fzf"
 alias sudo='sudo '
 alias pls='eval "sudo $(fc -ln -1)"'
 
-# pyenv (lazy load)
+# ---------- pyenv (lazy load) ----------
 export PYENV_ROOT=$HOME/.pyenv
 export PATH=$PYENV_ROOT/bin:$PATH
-pyenv() {
-  unfunction pyenv
-  eval "$(command pyenv init -)"
-  eval "$(command pyenv virtualenv-init -)"
-  pyenv "$@"
-}
+if [[ -n "$ZSH_VERSION" ]]; then
+  pyenv() { unfunction pyenv; eval "$(command pyenv init -)"; eval "$(command pyenv virtualenv-init -)"; pyenv "$@"; }
+elif [[ -n "$BASH_VERSION" ]]; then
+  pyenv() { unset -f pyenv; eval "$(command pyenv init -)"; eval "$(command pyenv virtualenv-init -)"; pyenv "$@"; }
+fi
 alias pyrun="pipenv run python"
 
-# goenv (lazy load)
+# ---------- goenv (lazy load) ----------
 export GOENV_ROOT=$HOME/.goenv
 export PATH=$GOENV_ROOT/bin:$PATH
 export GOPATH=$HOME/xvar/xgo
 export PATH=$GOPATH/bin:$PATH
-goenv() {
-  unfunction goenv
-  eval "$(command goenv init -)"
-  goenv "$@"
-}
+if [[ -n "$ZSH_VERSION" ]]; then
+  goenv() { unfunction goenv; eval "$(command goenv init -)"; goenv "$@"; }
+elif [[ -n "$BASH_VERSION" ]]; then
+  goenv() { unset -f goenv; eval "$(command goenv init -)"; goenv "$@"; }
+fi
 
-# ghq
+# ---------- NVM (lazy load) ----------
+export NVM_DIR="$HOME/.nvm"
+export NVM_NODEJS_ORG_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/
+if [[ -n "$ZSH_VERSION" ]]; then
+  nvm() { unfunction nvm; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm "$@"; }
+elif [[ -n "$BASH_VERSION" ]]; then
+  nvm() { unset -f nvm; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm "$@"; }
+fi
+
+# ---------- ghq ----------
 alias ghqget="ghq get"
 alias ghqlist="ghq list"
 alias ghqroot="ghq root"
 alias ghqsync="ghq-sync.sh"
 
-# java
-# export JAVA_HOME=`/usr/libexec/java_home -v 1.8`
+# ---------- Java ----------
 export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"
 
-# NVM (lazy load)
-export NVM_DIR="$HOME/.nvm"
-export NVM_NODEJS_ORG_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/
-nvm() {
-  unfunction nvm
-  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-  nvm "$@"
-}
-
-# uv (cached completion)
-_uv_comp="$HOME/.cache/uv_completion.zsh"
-_uvx_comp="$HOME/.cache/uvx_completion.zsh"
-if [[ ! -f "$_uv_comp" ]]; then
-  uv generate-shell-completion zsh > "$_uv_comp"
-  uvx --generate-shell-completion zsh > "$_uvx_comp"
+# ---------- uv (cached completion) ----------
+if [[ -n "$ZSH_VERSION" ]]; then
+  _uv_comp="$HOME/.cache/uv_completion.zsh"
+  _uvx_comp="$HOME/.cache/uvx_completion.zsh"
+  if [[ ! -f "$_uv_comp" ]]; then
+    uv generate-shell-completion zsh > "$_uv_comp"
+    uvx --generate-shell-completion zsh > "$_uvx_comp"
+  fi
+  source "$_uv_comp"
+  source "$_uvx_comp"
+  unset _uv_comp _uvx_comp
+elif [[ -n "$BASH_VERSION" ]]; then
+  _uv_comp="$HOME/.cache/uv_completion.bash"
+  _uvx_comp="$HOME/.cache/uvx_completion.bash"
+  if [[ ! -f "$_uv_comp" ]]; then
+    uv generate-shell-completion bash > "$_uv_comp" 2>/dev/null
+    uvx --generate-shell-completion bash > "$_uvx_comp" 2>/dev/null
+  fi
+  [[ -f "$_uv_comp" ]] && source "$_uv_comp"
+  [[ -f "$_uvx_comp" ]] && source "$_uvx_comp"
+  unset _uv_comp _uvx_comp
 fi
-source "$_uv_comp"
-source "$_uvx_comp"
-unset _uv_comp _uvx_comp
 
-# pnpm
+# ---------- pnpm ----------
 export PNPM_HOME="$HOME/.local/share/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
   *) export PATH="$PNPM_HOME:$PATH" ;;
 esac
 
-# cargo
-[ -s "$HOME/.cargo/env" ] && \. "$HOME/.cargo/env"
+# ---------- cargo ----------
+[ -s "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
-# bun
+# ---------- bun ----------
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 [ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"
 
-# deno
+# ---------- deno ----------
 [ -f "$HOME/.deno/env" ] && . "$HOME/.deno/env"
 
-# Ollama
+# ---------- Ollama ----------
 export OLLAMA_HOST=0.0.0.0:11434
 
-# CC
+# ---------- Proxy & tools ----------
 export HTTPS_PROXY=http://129.211.81.198:26588
 export HTTP_PROXY=http://129.211.81.198:26588
 alias cc="claude --dangerously-skip-permissions"
 alias c="code"
 alias c.="code ."
-
