@@ -116,3 +116,4 @@ fi
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 . "$HOME/.cargo/env"
+. "$HOME/.deno/env"

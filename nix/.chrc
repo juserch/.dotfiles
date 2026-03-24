@@ -2,53 +2,61 @@
 
 # PATH
 export PATH=$HOME/.chlocal/bin:$PATH
-chmod +x $HOME/.chlocal/bin/*.sh
 
 # hh
 export HISTFILE=~/.zsh_history  # ensure history file visibility
 export HH_CONFIG=hicolor        # get more colors
-bindkey -s "\C-r" "\eqhh\n"     # bind hh to Ctrl-r (for Vi mode check doc)
 
-# sh
+# fzf
+if [[ ! "$PATH" == */.fzf/bin* ]]; then
+  PATH="$HOME/.fzf/bin${PATH:+:${PATH}}"
+fi
+# reload keybindings after zsh-vi-mode init to avoid conflict
+_chrc_after_vi_init() {
+  source <(fzf --zsh)
+  # restore history-substring-search bindings overridden by zsh-vi-mode
+  bindkey -M vicmd 'k' history-substring-search-up
+  bindkey -M vicmd 'j' history-substring-search-down
+  bindkey '^[[A' history-substring-search-up
+  bindkey '^[[B' history-substring-search-down
+}
+zvm_after_init_commands+=(_chrc_after_vi_init)
+
+# alias
 alias ll="ls -lh"
 alias la="ls -lAh"
 alias lt="ls -lrtAh"
 alias lk="k -rtAh"
 alias fl="ls -lAh | fzf"
+alias ff="find . -type f | fzf"
 alias fh="history | fzf"
 alias fe="env | fzf"
 alias fp="ps -ef | fzf"
 alias fs="ss -anpoim |fzf"
+alias sudo='sudo '
+alias pls='eval "sudo $(fc -ln -1)"'
 
-## emacs
-#xe () {
-#  emacs "$@" &
-#}
-#alias e="emacs -nw"
-##alias g='cd $(ghq root)/$(ghq list | peco)'
-##alias gh='hub browse $(ghq list | peco | cut -d "/" -f 2,3)'
-
-# pyenv
+# pyenv (lazy load)
 export PYENV_ROOT=$HOME/.pyenv
 export PATH=$PYENV_ROOT/bin:$PATH
-eval "$(pyenv init -)"
-eval "$(pyenv virtualenv-init -)"
+pyenv() {
+  unfunction pyenv
+  eval "$(command pyenv init -)"
+  eval "$(command pyenv virtualenv-init -)"
+  pyenv "$@"
+}
 alias pyrun="pipenv run python"
 
-# rbenv
-#export RBENV_ROOT=$HOME/.rbenv
-#export PATH=$RBENV_ROOT/bin:$PATH
-#eval "$(rbenv init -)"
-
-# goenv
+# goenv (lazy load)
 export GOENV_ROOT=$HOME/.goenv
 export PATH=$GOENV_ROOT/bin:$PATH
-eval "$(goenv init -)"
-export GOPATH=~/xvar/xgo
+export GOPATH=$HOME/xvar/xgo
 export PATH=$GOPATH/bin:$PATH
-
-# fzf
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+goenv() {
+  unfunction goenv
+  eval "$(command goenv init -)"
+  goenv "$@"
+}
 
 # ghq
 alias ghqget="ghq get"
@@ -57,7 +65,54 @@ alias ghqroot="ghq root"
 alias ghqsync="ghq-sync.sh"
 
 # java
-#export JAVA_HOME=`/usr/libexec/java_home -v 1.8`
+# export JAVA_HOME=`/usr/libexec/java_home -v 1.8`
 export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"
 
+# NVM (lazy load)
+export NVM_DIR="$HOME/.nvm"
+export NVM_NODEJS_ORG_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/
+nvm() {
+  unfunction nvm
+  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+  nvm "$@"
+}
+
+# uv (cached completion)
+_uv_comp="$HOME/.cache/uv_completion.zsh"
+_uvx_comp="$HOME/.cache/uvx_completion.zsh"
+if [[ ! -f "$_uv_comp" ]]; then
+  uv generate-shell-completion zsh > "$_uv_comp"
+  uvx --generate-shell-completion zsh > "$_uvx_comp"
+fi
+source "$_uv_comp"
+source "$_uvx_comp"
+unset _uv_comp _uvx_comp
+
+# pnpm
+export PNPM_HOME="$HOME/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+
+# cargo
+[ -s "$HOME/.cargo/env" ] && \. "$HOME/.cargo/env"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+[ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"
+
+# deno
+[ -f "$HOME/.deno/env" ] && . "$HOME/.deno/env"
+
+# Ollama
+export OLLAMA_HOST=0.0.0.0:11434
+
+# CC
+export HTTPS_PROXY=http://129.211.81.198:26588
+export HTTP_PROXY=http://129.211.81.198:26588
+alias cc="claude --dangerously-skip-permissions"
+alias c="code"
+alias c.="code ."
 
