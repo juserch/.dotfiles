@@ -40,6 +40,7 @@ alias fp="ps -ef | fzf"
 alias fs="ss -anpoim | fzf"
 alias sudo='sudo '
 alias pls='eval "sudo $(fc -ln -1)"'
+alias rc='source '
 
 # ---------- pyenv (lazy load) ----------
 export PYENV_ROOT=$HOME/.pyenv
@@ -125,9 +126,28 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 # ---------- Ollama ----------
 export OLLAMA_HOST=0.0.0.0:11434
 
-# ---------- Proxy & tools ----------
-export HTTPS_PROXY=http://129.211.81.198:26588
-export HTTP_PROXY=http://129.211.81.198:26588
+# code alias
 alias cc="claude --dangerously-skip-permissions"
 alias c="code"
 alias c.="code ."
+alias cx="codex"
+alias oc="opencode"
+
+# ---------- Proxy & tools ----------
+#export HTTPS_PROXY=http://129.211.81.198:26588
+#export HTTP_PROXY=http://129.211.81.198:26588
+#export HTTPS_PROXY=http://118.89.136.118:31906
+#export HTTP_PROXY=http://118.89.136.118:31906
+#export NO_PROXY=localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,llmnewapi.iflytek.com
+#export NO_PROXY=localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+#export no_proxy=localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,llmnewapi.iflytek.com
+#export no_proxy=localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+# Claude
+#export ANTHROPIC_BASE_URL="https://one.iflytek.com/api/llm/console/chat"
+#export ANTHROPIC_AUTH_TOKEN="sk-0cf48acc7c74406ab0756463890810e8bd9742527d734b65"
+#export ANTHROPIC_API_KEY=""
+# export ANTHROPIC_MODEL="your-model-name"
+
+# Re-prepend ~/.local/bin so wrappers (e.g. claude) win over nvm-managed bins
+export PATH="$HOME/.local/bin:$PATH"

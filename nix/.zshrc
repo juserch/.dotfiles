@@ -35,3 +35,6 @@ export POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true
 
 # My config
 [ -f ~/.chrc ] && source ~/.chrc
+
+# OpenClaw Completion
+source "/home/juserch/.openclaw/completions/openclaw.zsh"
