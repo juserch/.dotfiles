@@ -45,8 +45,9 @@ if p.exists():
             b["Background Color"]=c(0.098,0.114,0.153)  # #191D27，与宿主 Terminal 一致
             b["Foreground Color"]=c(0.878,0.878,0.878)
             b["Use Non-ASCII Font"]=False
+            b["Set Local Environment Vars"]=0   # 见下方说明，防 locale 弹窗
     p.write_bytes(plistlib.dumps(d))
-    print("    Default profile → MesloLGSNF-Regular 14 · 132x42 · 深色")
+    print("    Default profile → MesloLGSNF-Regular 14 · 132x42 · 深色 · 不设 locale")
 PYEOF
 fi
 
