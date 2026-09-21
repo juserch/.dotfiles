@@ -1,0 +1,251 @@
+# chrc - shared shell config (bash/zsh)
+# vm-arm64: Ubuntu 26.04 ARM64 on UTM (jserver) — 从 nix/.chrc 裁剪
+# 裁剪依据：旧机 .zsh_history 实际用量 + 新架构（方案 §3.3/§3.6）
+# 变更见本文件末尾 CHANGES
+
+# ---------- PATH ----------
+export PATH=$HOME/.local/bin:$HOME/.chlocal/bin:$PATH
+
+# ---------- History ----------
+[[ -n "$ZSH_VERSION" ]] && export HISTFILE=~/.zsh_history
+
+# ---------- fzf ----------
+# 初始化挂在 zsh-vi-mode 的 after-init 回调里：zvm 在自身初始化时会重置键位，
+# 直接 bindkey 会被它覆盖。回调保证 fzf 与 history-substring-search 的绑定在
+# zvm 之后生效。⚠️ 这与 vm-arm64/.zshrc 启用 zsh-vi-mode 是成对的——
+# 若哪天停用 zvm，此处必须改为直接调用，否则回调永不执行、键位全失效。
+if [[ -n "$ZSH_VERSION" ]]; then
+  _chrc_after_vi_init() {
+    command -v fzf >/dev/null 2>&1 && source <(fzf --zsh)
+    if (( $+widgets[history-substring-search-up] )); then
+      bindkey -M vicmd 'k' history-substring-search-up
+      bindkey -M vicmd 'j' history-substring-search-down
+      bindkey '^[[A' history-substring-search-up
+      bindkey '^[[B' history-substring-search-down
+    fi
+  }
+  zvm_after_init_commands+=(_chrc_after_vi_init)
+elif [[ -n "$BASH_VERSION" ]]; then
+  command -v fzf >/dev/null 2>&1 && eval "$(fzf --bash)"
+fi
+
+# ---------- Aliases ----------
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+alias ll="ls -lh"
+alias la="ls -lAh"
+alias lt="ls -lrtAh"
+alias lk="k -rtAh"          # 需 zsh 插件 supercrabtree/k
+alias fl="ls -lAh | fzf"
+alias ff="find . -type f | fzf"
+alias fh="history | fzf"
+alias fe="env | fzf"
+alias fp="ps -ef | fzf"
+alias fs="ss -anpoim | fzf"
+alias sudo='sudo '
+alias pls='eval "sudo $(fc -ln -1)"'
+alias rc='source '
+
+# ---------- NVM (lazy load) ----------
+export NVM_DIR="$HOME/.nvm"
+export NVM_NODEJS_ORG_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/
+if [[ -n "$ZSH_VERSION" ]]; then
+  nvm() { unfunction nvm; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm "$@"; }
+elif [[ -n "$BASH_VERSION" ]]; then
+  nvm() { unset -f nvm; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm "$@"; }
+fi
+nvm --version > /dev/null
+
+# ---------- uv (cached completion) ----------
+if command -v uv >/dev/null 2>&1; then
+  if [[ -n "$ZSH_VERSION" ]]; then
+    _uv_comp="$HOME/.cache/uv_completion.zsh"
+    _uvx_comp="$HOME/.cache/uvx_completion.zsh"
+    if [[ ! -f "$_uv_comp" ]]; then
+      mkdir -p "$HOME/.cache"
+      uv generate-shell-completion zsh > "$_uv_comp" 2>/dev/null
+      uvx --generate-shell-completion zsh > "$_uvx_comp" 2>/dev/null
+    fi
+    [[ -f "$_uv_comp" ]] && source "$_uv_comp"
+    [[ -f "$_uvx_comp" ]] && source "$_uvx_comp"
+    unset _uv_comp _uvx_comp
+  fi
+fi
+
+# ---------- pnpm ----------
+export PNPM_HOME="$HOME/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+
+# ---------- cargo ----------
+[ -s "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+# ---------- Go ----------
+# 官方 tarball 装在 /usr/local/go（手册 B4），不用 goenv
+export PATH=$PATH:/usr/local/go/bin
+
+# ---------- Ollama ----------
+# 方案 §3.6：Ollama 原生跑 macOS 宿主（Metal + 48 GB），VM 仅作客户端。
+# 绝不能是 0.0.0.0——那会让 VM 内的实例暴露到局域网。
+export OLLAMA_HOST=192.168.64.1:11434
+
+# ---------- veltora ----------
+export VELTORA_ISSUES_REMOTE=$HOME/.veltora-prod/issues-control/authorities/issues.git
+export VELTORA_ISSUES_ACTOR=juserch
+
+# ---------- ccrc: 环境配置切换 ----------
+# 三份配置互斥（都设 HTTPS_PROXY），故切换前先清，避免叠加出错。
+#   g  公司内网（经宿主 SOCKS5·需先在宿主跑 intranet on）
+#   o  公网代理     i  iflytek 内网代理     a  仅 ANTHROPIC 网关
+ccrc() {
+  local c="${1:-}"
+  local _clr="unset ALL_PROXY HTTPS_PROXY HTTP_PROXY NO_PROXY no_proxy ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY"
+  case "$c" in
+    "" )
+      echo "用法: ccrc {g|o|i|a|off}"
+      echo "  g   公司内网（SOCKS5 → 宿主，需 intranet on）"
+      echo "  o   公网代理    i   iflytek 代理    a   ANTHROPIC 网关"
+      echo "  off 清空"
+      echo ""
+      echo "当前: ${ALL_PROXY:-${HTTPS_PROXY:-无代理}}"
+      [ -n "${ANTHROPIC_BASE_URL:-}" ] && echo "      BASE_URL=$ANTHROPIC_BASE_URL"
+      return 0 ;;
+    off ) eval "$_clr"; echo "  已清空代理与 ANTHROPIC 变量" ;;
+    g|o|i|a )
+      [ -f ~/.ccrc4$c ] || { echo "  无 ~/.ccrc4$c"; return 1; }
+      eval "$_clr"; source ~/.ccrc4$c
+      echo "  → 4$c  ${ALL_PROXY:-${HTTPS_PROXY:-无代理}}"
+      [ -n "${ANTHROPIC_BASE_URL:-}" ] && echo "     BASE_URL=$ANTHROPIC_BASE_URL"
+      if [ "$c" = g ]; then
+        curl -s -o /dev/null -m 6 --proxy socks5h://127.0.0.1:1080 https://one.iflytek.com/ \
+          && echo "     隧道通" || echo "     ⚠️ 隧道不通——宿主执行 intranet on"
+      fi ;;
+    * ) echo "  未知: $c（用 ccrc 看用法）"; return 1 ;;
+  esac
+}
+
+# ---------- VS Code remote-cli ----------
+# VM 内无 GUI（§3.5：编辑器在 macOS，开发环境在 VM）。VS Code 通过 Remote-SSH 连过来时
+# 会在集成终端里注入 code 命令，但普通 SSH 会话没有。这里把 server 自带的 remote-cli
+# 加进 PATH，使 `code xxx` 在 VM 的任意 shell 里都能用——文件会在已连接的 macOS 窗口打开。
+#
+# ⚠️ 路径含 commit hash（Insiders 每次更新 server 都变），故动态取最新的那个，不写死。
+# ⚠️ 前提：必须已有一个连到本机的 VS Code 窗口；没有窗口时 code 无法凭空拉起 macOS 应用。
+if [ -d "$HOME/.vscode-server-insiders/cli/servers" ]; then
+  _vsc_cli=$(ls -dt "$HOME"/.vscode-server-insiders/cli/servers/Insiders-*/server/bin/remote-cli 2>/dev/null | head -1)
+  if [ -n "$_vsc_cli" ] && [ -x "$_vsc_cli/code-insiders" ]; then
+    case ":$PATH:" in
+      *":$_vsc_cli:"*) ;;
+      *) export PATH="$_vsc_cli:$PATH" ;;
+    esac
+    # remote-cli 里的二进制名是 code-insiders；补一个 code 同名入口供别名使用。
+    # 用 -sfn 无条件刷新：server 升级后 hash 变，旧写法的 [ ! -e ] 守卫会让断链一直留着。
+    mkdir -p "$HOME/.local/bin"
+    ln -sfn "$_vsc_cli/code-insiders" "$HOME/.local/bin/code"
+  fi
+  unset _vsc_cli
+fi
+
+# 解析当前 server 的 remote-cli 二进制。hash 每次升级都变，故在调用时解析而非缓存。
+_vsc_code_bin() {
+  ls -dt "$HOME"/.vscode-server-insiders/cli/servers/Insiders-*/server/bin/remote-cli/code-insiders \
+    2>/dev/null | head -1
+}
+
+# socket 探活。窗口关闭后 socket 文件会残留，能 connect 但永不应答，故必须带超时，
+# 否则 code 会干等到自己超时。
+_vsc_sock_alive() {
+  [ -S "$1" ] || return 1
+  VSCODE_IPC_HOOK_CLI="$1" timeout 2 "$2" --status >/dev/null 2>&1
+}
+
+# code：在**每次调用时**解析 IPC socket。
+#
+# ⚠️ 不要改回"启动时 export VSCODE_IPC_HOOK_CLI"（本文件 2026-09-21 前的写法）：
+#    SSH 会话通常先于 VS Code 窗口建立，那一刻 /run/user/$UID 下还没有 socket，
+#    变量就此空到会话结束 —— 这正是 `code .` 报
+#    "Command is only available in WSL or inside a Visual Studio Code terminal."
+#    的根因（该提示在变量为空时打印，与 WSL 无关）。
+#    反之若启动时抓到的是僵尸 socket，code 会挂起到超时。两种失败都源于"启动时快照"。
+code() {
+  _vsc_bin=$(_vsc_code_bin)
+  if [ -z "$_vsc_bin" ]; then
+    printf '%s\n' "code: 本机没有 VS Code Server 的 remote-cli。" >&2
+    printf '%s\n' "      先从 macOS 用 Remote-SSH 连一次，VS Code 会自动装上。" >&2
+    unset _vsc_bin
+    return 1
+  fi
+
+  _vsc_use=""
+  # VS Code 集成终端会注入该变量，但仍要确认它没失效
+  if [ -n "$VSCODE_IPC_HOOK_CLI" ] && _vsc_sock_alive "$VSCODE_IPC_HOOK_CLI" "$_vsc_bin"; then
+    _vsc_use="$VSCODE_IPC_HOOK_CLI"
+  else
+    # 普通 SSH 会话：按新到旧探活。只看最近 3 个，避免被一堆僵尸 socket 拖住。
+    for _vsc_s in $(ls -t /run/user/$(id -u)/vscode-ipc-*.sock 2>/dev/null | head -3); do
+      if _vsc_sock_alive "$_vsc_s" "$_vsc_bin"; then _vsc_use="$_vsc_s"; break; fi
+    done
+    unset _vsc_s
+  fi
+
+  if [ -z "$_vsc_use" ]; then
+    printf '%s\n' "code: 当前没有连到 $(hostname) 的 VS Code 窗口，remote CLI 无处转发。" >&2
+    printf '%s\n' "      办法一：在 macOS 上用 Remote-SSH 连到 $(hostname)，再回来重试" >&2
+    printf '%s\n' "      办法二：在 macOS 上直接执行" >&2
+    printf '%s\n' "              code --remote ssh-remote+$(hostname) $PWD" >&2
+    unset _vsc_bin _vsc_use
+    return 1
+  fi
+
+  VSCODE_IPC_HOOK_CLI="$_vsc_use" "$_vsc_bin" "$@"
+  _vsc_rc=$?
+  unset _vsc_bin _vsc_use
+  return $_vsc_rc
+}
+
+# ---------- code alias ----------
+alias cc="claude --dangerously-skip-permissions"
+alias c="code"
+alias c.="code ."
+alias cx="codex"
+alias oc="opencode"
+
+# Re-prepend ~/.local/bin so wrappers (e.g. claude) win over nvm-managed bins
+export PATH="$HOME/.local/bin:$PATH"
+
+# =====================================================================
+# CHANGES vs nix/.chrc (2026-09-20)
+#
+# 修正（留着会出问题）
+#   OLLAMA_HOST  0.0.0.0:11434 → 192.168.64.1:11434（宿主）。方案 §3.6 明确
+#                警告不要绑 0.0.0.0；且 Ollama 在宿主，VM 只是客户端。
+#   JAVA_HOME    删除。原值 java-21-openjdk-amd64 在 arm64 上不存在；
+#                Java 尚未安装（手册 B4 列为按需），装了再加。
+#   fzf 初始化   保持 zvm_after_init_commands 回调形式（与 .zshrc 启用 zsh-vi-mode
+#                配套），但加了 command -v fzf 与 $+widgets 守卫，未装时静默跳过
+#                而非报错。原版无守卫。
+#   ANTHROPIC_*  删除（含已注释的明文 token）。
+#   HTTP(S)_PROXY 删除（全为注释，且代理地址已失效）。
+#
+# 移除（旧机 .zsh_history 11170 条中 0 次使用）
+#   goenv + GOENV_ROOT + GOPATH=$HOME/xvar/xgo   改用 /usr/local/go
+#   ghq* 四个别名 + ghq-sync.sh                   ghq 未装
+#   bun / BUN_INSTALL                             0 次
+#   deno / .deno/env                              0 次
+#   HH_CONFIG（hstr）                             0 次
+#   $HOME/.fzf/bin 的 PATH 拼接                   fzf 走 apt 装在 /usr/bin
+#
+# 移除（架构决策）
+#   pyenv lazy load + PYENV_ROOT + pyrun          已废弃，改用 uv（方案 §8.2 C3）
+#
+# 新增
+#   PATH += /usr/local/go/bin                     Go 的实际安装位置
+#   VELTORA_ISSUES_REMOTE / _ACTOR                指向单个裸仓（手册 C2.4）
+#   多处 command -v 守卫                          工具未装时静默跳过而非报错
+#
+# 待装才生效
+#   lk      需 zsh 插件 supercrabtree/k
+#   fzf 系列 需 apt install fzf
+# =====================================================================

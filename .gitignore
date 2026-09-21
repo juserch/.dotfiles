@@ -1,1 +1,4 @@
 dotfiles/.spacemacs.d/custom.el
+
+# 本机改动前的备份，不入库
+*.bak-*
