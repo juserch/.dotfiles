@@ -3,7 +3,8 @@
     "iTerm2 动态 profile — 由 ienv/shell 的评估 D13 生成。",
     "iTerm2 启动时自动读取本目录，改动即时生效，无需在 GUI 里点。",
     "用途：连 guest（jserver VM）时整窗外观与本机不同，防止在错机器上敲命令。",
-    "打开方式：iTerm2 菜单 Profiles → jserver (VM)，或 ⌘O 搜 jserver。"
+    "打开方式：iTerm2 菜单 Profiles → jserver (VM)，或 ⌘O 搜 jserver。",
+    "字体 MesloLGSNF-Regular 由 font-meslo-lg-nerd-font 提供；p10k 的图标依赖它。"
   ],
   "Profiles": [
     {
@@ -13,16 +14,50 @@
       "Command": "ssh jserver",
       "Badge Text": "jserver",
       "Custom Directory": "No",
-      "Background Color":  { "Color Space": "sRGB", "Red Component": 0.121, "Green Component": 0.121, "Blue Component": 0.121, "Alpha Component": 1 },
-      "Foreground Color":  { "Color Space": "sRGB", "Red Component": 0.850, "Green Component": 0.850, "Blue Component": 0.850, "Alpha Component": 1 },
-      "Badge Color":       { "Color Space": "sRGB", "Red Component": 0.909, "Green Component": 0.639, "Blue Component": 0.239, "Alpha Component": 0.45 },
-      "Cursor Color":      { "Color Space": "sRGB", "Red Component": 0.909, "Green Component": 0.639, "Blue Component": 0.239, "Alpha Component": 1 },
-      "Bound Hosts": ["jserver", "juserch@jserver"],
+      "Background Color": {
+        "Color Space": "sRGB",
+        "Red Component": 0.121,
+        "Green Component": 0.121,
+        "Blue Component": 0.121,
+        "Alpha Component": 1
+      },
+      "Foreground Color": {
+        "Color Space": "sRGB",
+        "Red Component": 0.85,
+        "Green Component": 0.85,
+        "Blue Component": 0.85,
+        "Alpha Component": 1
+      },
+      "Badge Color": {
+        "Color Space": "sRGB",
+        "Red Component": 0.909,
+        "Green Component": 0.639,
+        "Blue Component": 0.239,
+        "Alpha Component": 0.45
+      },
+      "Cursor Color": {
+        "Color Space": "sRGB",
+        "Red Component": 0.909,
+        "Green Component": 0.639,
+        "Blue Component": 0.239,
+        "Alpha Component": 1
+      },
+      "Bound Hosts": [
+        "jserver",
+        "juserch@jserver"
+      ],
       "Terminal Type": "xterm-256color",
       "Unlimited Scrollback": true,
       "Mouse Reporting": true,
       "Silence Bell": true,
-      "Close Sessions On End": false
+      "Close Sessions On End": false,
+      "Normal Font": "MesloLGSNF-Regular 14",
+      "Use Non-ASCII Font": false,
+      "Ambiguous Double Width": false,
+      "Horizontal Spacing": 1.0,
+      "Vertical Spacing": 1.0,
+      "Columns": 132,
+      "Rows": 42
     }
   ]
 }
