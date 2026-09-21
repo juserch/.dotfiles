@@ -1,0 +1,35 @@
+[user]
+	name = JuneQ Cheung
+	email = a1624jz@aiit.ac.jp
+
+[core]
+	quotepath = false
+[pull]
+	rebase = true
+[init]
+	defaultBranch = main
+[diff]
+	algorithm = histogram
+
+# =====================================================================
+# CHANGES vs nix/.gitconfig (2026-09-21)
+#
+# 移除
+#   [ghq] root        ghq 未安装，且 ~/xvar/xghq 与 ~/xvar/xgo/src 均不存在
+#                     （.chrc 已把 GOPATH=$HOME/xvar/xgo 改用 /usr/local/go）。
+#   core.longpaths    Windows 专用选项，Linux 上无作用。
+#   [filter "lfs"]    nix 版是 clean/smudge = cat + required = false，实为"禁用 LFS"。
+#                     本机 git-lfs 已安装，/etc/gitconfig 里已有正确的 filter 配置；
+#                     在 ~/.gitconfig 重复声明会覆盖系统配置，令 LFS 文件检出成
+#                     指针文本。故整段不带过来，交给 /etc/gitconfig。
+#   [safe] directory  nix 版有 60 行且大量重复，全部指向 ~/.cache/veltora_swe_repos，
+#                     该目录已不存在。这类条目由 git 在需要时自行追加，不必预置。
+#   [credential]      nix 版整段是注释且 helper 为空，无实际内容。
+#
+# 保留
+#   core.quotepath=false    否则中文文件名会显示成 \344\270\255 八进制转义，
+#                           本机中文目录较多，关掉更实用。
+#   pull.rebase=true        与 nix 一致。
+#   init.defaultBranch=main 与 nix 一致。
+#   diff.algorithm=histogram 与 nix 一致。
+# =====================================================================
