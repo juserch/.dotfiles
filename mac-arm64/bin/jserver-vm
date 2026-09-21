@@ -1,0 +1,76 @@
+#!/bin/bash
+# jserver-vm — 宿主侧后台拉起/停止 guest VM，不保留任何窗口。
+#
+# 机制：① UTM.app 必须常驻，utmctl 才有对象（退出 UTM 会连带停 VM）
+#       ② utmctl start --hide  以无窗口方式启动
+#       ③ 轮询 22 端口判活——不能用 ping，guest 默认不回 ICMP（迁移方案 §10.6）
+#
+# ⚠️ 三个实测坑（2026-09-21，均非文档所载）：
+#    · **绝不能用 `open -j`（隐藏启动）拉 UTM**——UTM 4.7.5 会在构建主窗口时
+#      EXC_BAD_ACCESS 段错误（SwiftUICore HStack / swift_task_isCurrentExecutor），
+#      崩溃后残留 Dock 图标 + 新实例，表现为"两个 UTM"。改为让 utmctl 自己拉起 UTM。
+#    · utmctl 在 UTM 未就绪时会打 `Error from event: …(-10004)` 到 **stdout**，
+#      **且退出码仍是 0**——既不能当失败，也不能信退出码，一律回查 status。
+#    · `--hide` 只管 UTM 主窗口，不保证 VM 显示窗口不出现（见文档 §7）。
+#
+# 用法：jserver-vm {start|stop|suspend|status}
+
+set -uo pipefail
+UTMCTL=/Applications/UTM.app/Contents/MacOS/utmctl
+VM="${JSERVER_VM_NAME:-Linux}"        # UTM 里的显示名（hostname 另为 jserver）
+HOST="${JSERVER_HOST:-jserver.local}"
+
+# 过滤掉 utmctl 打在 stdout 上的 Apple Event 报错，只留真正的状态词
+_status() { "$UTMCTL" status "$VM" 2>/dev/null | grep -vi "error from event" | tr -d '[:space:]'; }
+_ssh_up() { nc -z -G 2 "$HOST" 22 >/dev/null 2>&1; }
+
+# 不预先 open UTM——utmctl 自己会拉起它。实测这是唯一不触发崩溃的路径。
+# 宿主一睡，VM 会被一并挂起（实测 status=paused、ssh 卡死）。本机 pmset 是
+# `sleep 1`——闲置 1 分钟就睡。故 VM 在跑期间持有一个睡眠断言，用 -w 绑到 UTM 进程：
+# UTM 退出，caffeinate 自己也退出，不会留下"永不睡眠"的残留。
+# ⚠️ caffeinate -s 只在接电源时生效；电池供电仍会正常睡眠，不影响续航。
+_hold_awake() {
+  pgrep -f "caffeinate -i -s -w" >/dev/null && return 0
+  local pid; pid=$(pgrep -x UTM | head -1)
+  [ -n "$pid" ] || return 0
+  nohup caffeinate -i -s -w "$pid" >/dev/null 2>&1 &
+  echo "  已持睡眠断言（绑定 UTM pid ${pid}）"
+}
+
+_wait_state() {                       # $1=期望状态 $2=最多等几秒
+  local i
+  for i in $(seq 1 "$2"); do [ "$(_status)" = "$1" ] && return 0; sleep 1; done
+  return 1
+}
+
+case "${1:-status}" in
+  on|start)
+    if [ "$(_status)" = started ]; then
+      echo "  VM 已在运行"
+    else
+      # UTM 未运行时这行会连带把 UTM 拉起来，并打两行 -10004——属正常，忽略
+      "$UTMCTL" start "$VM" --hide >/dev/null 2>&1
+      if ! _wait_state started 30; then
+        "$UTMCTL" start "$VM" --hide >/dev/null 2>&1    # UTM 冷启那次常常没接住，重发一次
+        _wait_state started 30 || { echo "  ⚠️ 启动失败（status=$(_status)）"; exit 1; }
+      fi
+      echo "  已后台启动（UTM 主窗口隐藏）"
+    fi
+    _hold_awake
+    for _ in $(seq 1 60); do
+      _ssh_up && { echo "  ssh 就绪 → $HOST"; exit 0; }
+      sleep 2
+    done
+    echo "  ⚠️ 120s 内 ssh 未就绪，用 utmctl attach 看串口"; exit 1 ;;
+  off|stop) "$UTMCTL" stop "$VM" >/dev/null 2>&1
+            _wait_state stopped 60
+            echo "  VM: $(_status)" ;;
+  suspend)  "$UTMCTL" suspend "$VM" >/dev/null 2>&1
+            echo "  VM: $(_status)（⚠️ 恢复后须校时，见方案 §10.6）" ;;
+  status)   echo "  UTM: $(pgrep -x UTM >/dev/null && echo 运行中 || echo 未运行)"
+            echo "  VM : $(_status)"
+            _ssh_up && echo "  ssh: 通" || echo "  ssh: 不通"
+            pgrep -f "caffeinate -i -s -w" >/dev/null \
+              && echo "  睡眠断言: 已持有" || echo "  睡眠断言: 无（宿主睡眠会挂起 VM）" ;;
+  *) echo "用法: jserver-vm {start|stop|suspend|status}"; exit 1 ;;
+esac

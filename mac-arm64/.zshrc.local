@@ -1,0 +1,43 @@
+# ~/.zshrc.local — 本机私有配置，由 ~/.zshrc 末行 source。
+# 来源：guest（jserver）的 ~/.dotfiles/vm-arm64/.chrc，按 macOS/BSD 语义改写。
+# 评估与决策见 ~/iuser/workspace/icode/ienv/shell/host-shell-assessment.md（D3–D6）。
+# 未移植的部分：p10k / zsh-vi-mode / ccrc() / code()（D8·D10·§2.4），刻意不引。
+
+# ══ fzf ════════════════════════════════════════════════════════════════════
+# 宿主无 zsh-vi-mode（D10），故直接绑定，不用 guest 那套 zvm_after_init 回调。
+# 装了 fzf 就有 ^R（历史）· ^T（文件）· M-c（cd），与 guest 同为 4 个绑定。
+if command -v fzf >/dev/null 2>&1; then
+  source <(fzf --zsh)
+fi
+
+# ══ zoxide ═════════════════════════════════════════════════════════════════
+# `z <关键词>` 跳到常去目录；`zi` 交互选择。必须在 compinit 之后，这里满足。
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init zsh)"
+fi
+
+# ══ 别名 ═══════════════════════════════════════════════════════════════════
+# ls/ll/la/grep/../... 已在 ~/.zshrc 里按 BSD 的 -G 定义过，此处不重复。
+alias lt='ls -lrtAh'            # 按修改时间正序，最新在最下
+
+# f 系列：guest .chrc 的同名别名，管道目标改成 macOS 有的命令
+alias fl='ls -lAh | fzf'
+alias ff='find . -type f | fzf'
+alias fh='history | fzf'
+alias fe='env | fzf'
+alias fp='ps -ef | fzf'
+alias fs='lsof -iTCP -sTCP:LISTEN -nP | fzf'   # guest 用 ss，macOS 无
+
+alias sudo='sudo '              # 末尾空格：让 sudo 后面的别名也能展开
+alias pls='eval "sudo $(fc -ln -1)"'           # 用 sudo 重跑上一条
+alias rc='source '
+
+# 编辑器 / agent CLI
+alias c='code'
+alias c.='code .'
+alias cx='codex'
+alias cc='claude --dangerously-skip-permissions'
+command -v opencode >/dev/null 2>&1 && alias oc='opencode'   # 宿主暂未装
+
+# ══ 未移植说明 ═════════════════════════════════════════════════════════════
+#   lk   需 zsh 插件 supercrabtree/k，随 antigen 而来——宿主不引框架（D1=①），故无

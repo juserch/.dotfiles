@@ -1,0 +1,17 @@
+{
+  // 字号：默认 12 偏小（2026-09-21 调整）。editor/terminal 各自独立，
+  // window.zoomLevel 管整体 UI（侧边栏·标签页），每 ±1 = ±20%。
+  "editor.fontSize": 14,
+  "terminal.integrated.fontSize": 13,
+  "window.zoomLevel": 0.5,
+  // §3.7.3：Insiders 日更会让 VM 侧 server 反复重下（旧机 .vscode-server 累积到 2.1 GB）
+  "update.mode": "manual",
+  "extensions.autoUpdate": "off",
+
+  // §3.7.5：Settings Sync 只在 OSS 侧开，避免与 Stable(Internal) 互相回灌
+  "remote.SSH.defaultExtensions": [],
+  "remote.SSH.useLocalServer": true,
+  "remote.SSH.connectTimeout": 30,
+  "workbench.startupEditor": "none",
+  "claudeCode.preferredLocation": "panel"
+}
