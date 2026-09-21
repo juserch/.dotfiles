@@ -4,7 +4,8 @@
     "iTerm2 启动时自动读取本目录，改动即时生效，无需在 GUI 里点。",
     "用途：连 guest（jserver VM）时整窗外观与本机不同，防止在错机器上敲命令。",
     "打开方式：iTerm2 菜单 Profiles → jserver (VM)，或 ⌘O 搜 jserver。",
-    "字体 MesloLGSNF-Regular 由 font-meslo-lg-nerd-font 提供；p10k 的图标依赖它。"
+    "字体 MesloLGSNF-Regular 由 font-meslo-lg-nerd-font 提供；p10k 的图标依赖它。",
+    "Set Local Environment Vars=0（不设 locale 变量）：本机 AppleLocale=en_CN，系统无对应 UNIX locale，iTerm2 自动推算会失败并弹窗要你选。guest 的 /etc/default/locale 本就是 en_US.UTF-8，不需要宿主传，故直接关掉推算。"
   ],
   "Profiles": [
     {
@@ -57,7 +58,8 @@
       "Horizontal Spacing": 1.0,
       "Vertical Spacing": 1.0,
       "Columns": 132,
-      "Rows": 42
+      "Rows": 42,
+      "Set Local Environment Vars": 0
     }
   ]
 }
