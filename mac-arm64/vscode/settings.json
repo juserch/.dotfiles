@@ -1,0 +1,9 @@
+{
+  // 字号：默认 12 偏小（2026-09-21 调整）。editor/terminal 各自独立，
+  // window.zoomLevel 管整体 UI（侧边栏·标签页），每 ±1 = ±20%。
+  "editor.fontSize": 14,
+  "terminal.integrated.fontSize": 13,
+  "window.zoomLevel": 0.5,
+    "workbench.startupEditor": "none",
+    "claudeCode.preferredLocation": "panel"
+}
