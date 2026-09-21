@@ -22,6 +22,34 @@ osascript -e 'tell application "Terminal"
   set number of rows    of settings set "Clear Dark" to 42
 end tell' 2>/dev/null || echo "  （Terminal 未运行或无自动化授权，跳过）"
 
+echo "▸ iTerm2：默认 profile = jserver，本地 Default profile 也调成一致外观"
+# 动态 profile（iterm2/jserver.json）只定义 profile 本身；"哪个是默认"与内置
+# Default profile 的外观都存在 com.googlecode.iterm2.plist 里，得单独写。
+# ⚠️ iTerm2 退出时会把内存里的偏好整体写回，运行中改必被覆盖——故先判进程。
+if pgrep -x iTerm2 >/dev/null 2>&1; then
+  echo "  ⚠️ iTerm2 正在运行，跳过（先退出再跑本脚本）"
+else
+  defaults write com.googlecode.iterm2 "Default Bookmark Guid" \
+    -string "A4812E9A-FDF6-478C-B467-2CE94F93D6EE"     # jserver (VM)
+  python3 - <<'PYEOF'
+import plistlib, pathlib
+p = pathlib.Path.home()/"Library/Preferences/com.googlecode.iterm2.plist"
+if p.exists():
+    d = plistlib.loads(p.read_bytes())
+    def c(r,g,b): return {"Color Space":"sRGB","Red Component":r,"Green Component":g,
+                          "Blue Component":b,"Alpha Component":1.0}
+    for b in d.get("New Bookmarks", []):
+        if b.get("Name") == "Default":                  # iTerm2 里开本地 shell 时用
+            b["Normal Font"]="MesloLGSNF-Regular 14"
+            b["Columns"]=132; b["Rows"]=42
+            b["Background Color"]=c(0.098,0.114,0.153)  # #191D27，与宿主 Terminal 一致
+            b["Foreground Color"]=c(0.878,0.878,0.878)
+            b["Use Non-ASCII Font"]=False
+    p.write_bytes(plistlib.dumps(d))
+    print("    Default profile → MesloLGSNF-Regular 14 · 132x42 · 深色")
+PYEOF
+fi
+
 cat <<'NOTE'
 
 ▸ 需手工处理的两项（脚本不碰）：
