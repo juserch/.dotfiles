@@ -13,10 +13,14 @@ defaults write com.utmapp.UTM HideDockIcon  -bool true    # 下次启动生效
 defaults write com.utmapp.UTM NSAppSleepDisabled     -bool true   # 防 App Nap 挂起 VM
 defaults write com.utmapp.UTM NSQuitAlwaysKeepsWindows -bool false # 关掉窗口状态恢复
 
-echo "▸ Terminal：默认 profile 字号（12 太小）"
-# 字号挂在 profile 上，不在窗口上；手动调窗口只影响当前窗口
-osascript -e 'tell application "Terminal" to set font size of settings set "Clear Dark" to 14' 2>/dev/null \
-  || echo "  （Terminal 未运行或无自动化授权，跳过）"
+echo "▸ Terminal：默认 profile 的字号与窗口尺寸"
+# 字号与行列数都挂在 profile 上，不在窗口上——手动拖窗口只影响当前那一个。
+# 132x42 @ 14pt：3456x2234 Retina（逻辑 1728x1117）下约占 64%x67%，可与编辑器并排。
+osascript -e 'tell application "Terminal"
+  set font size         of settings set "Clear Dark" to 14
+  set number of columns of settings set "Clear Dark" to 132
+  set number of rows    of settings set "Clear Dark" to 42
+end tell' 2>/dev/null || echo "  （Terminal 未运行或无自动化授权，跳过）"
 
 cat <<'NOTE'
 
