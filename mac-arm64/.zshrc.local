@@ -39,5 +39,34 @@ alias cx='codex'
 alias cc='claude --dangerously-skip-permissions'
 command -v opencode >/dev/null 2>&1 && alias oc='opencode'   # 宿主暂未装
 
+# ══ git ════════════════════════════════════════════════════════════════════
+# oh-my-zsh git 插件的别名。宿主不引框架（D1=①），故按 guest 上的确切定义手抄一份，
+# 保证两边语义一致——尤其 gl 是 git pull 不是 git log，glog 才是 log。
+alias ga='git add'
+alias gaa='git add --all'
+alias gb='git branch'
+alias gc='git commit --verbose'
+alias gcb='git checkout -b'
+alias gco='git checkout'
+alias gd='git diff'
+alias gf='git fetch'
+alias gl='git pull'
+alias glog='git log --oneline --decorate --graph'
+alias gp='git push'
+alias gss='git status --short'
+alias gst='git status'
+
+# 这两个 oh-my-zsh 里是函数（要解析当前分支/主分支名），这里直接用 git 自带能力实现
+gcm()   { git checkout "$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || echo main)"; }
+gpsup() { git push --set-upstream origin "$(git branch --show-current)"; }
+
+# ══ zsh 自身 ═══════════════════════════════════════════════════════════════
+# 旧机 .zsh_history 里各 12 次，但旧机的定义没纳入版本控制（手册 C4.1），
+# 这里按名字推断语义重建：config=编辑，reload=重载。
+zshconfig() { ${EDITOR:-vim} ~/.zshrc; }
+zshreload() { source ~/.zshrc && echo "已重载 ~/.zshrc"; }
+
 # ══ 未移植说明 ═════════════════════════════════════════════════════════════
-#   lk   需 zsh 插件 supercrabtree/k，随 antigen 而来——宿主不引框架（D1=①），故无
+#   lk                    需 zsh 插件 supercrabtree/k，随 antigen 而来——宿主不引框架（D1=①）
+#   validate_source_path  旧机自加的函数，未纳入版本控制，旧机已不在，无从恢复
+#   lcwiki                同上
