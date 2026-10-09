@@ -2,9 +2,13 @@
 # ⛔ 刻意不设 [user]：宿主无全局 git identity，每个仓用 git config --local 显式设置，
 #    避免用错身份提交（见 icode/CLAUDE.md「硬约束」）。vm-arm64/.gitconfig 的 [user] 不要带过来。
 
+# 注释一律单独成行：git config --global 写某个键时会重写该行，行尾注释随之丢失，
+# 而 ~/.gitconfig 软链到工作树，于是宿主平白多出 diff（2026-10-09 实测，写入方未查明）。
+#   quotepath=false     中文文件名不转成 \344\270\255 八进制
+#   excludesfile        全局忽略（.DS_Store 等本机产物）
 [core]
-	quotepath = false                       # 中文文件名不转成 \344\270\255 八进制
-	excludesfile = ~/.config/git/ignore     # 全局忽略（.DS_Store 等本机产物）
+	quotepath = false
+	excludesfile = ~/.config/git/ignore
 [init]
 	defaultBranch = main
 [pull]
