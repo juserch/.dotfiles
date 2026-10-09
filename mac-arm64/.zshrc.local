@@ -28,6 +28,12 @@ alias fe='env | fzf'
 alias fp='ps -ef | fzf'
 alias fs='lsof -iTCP -sTCP:LISTEN -nP | fzf'   # guest 用 ss，macOS 无
 
+# zsh 内置 history 无参时是 fc -l -16，只列最近 16 条；guest 的 oh-my-zsh 把它换成
+# omz_history（无参即 fc -l 1，列全部）。这里对齐 guest 语义，fh 也因此搜得到全部历史。
+# 用函数不用别名：带参数（history -E、history 300）时原样交给 fc，与 omz_history 一致。
+# ⚠️ 别写成 (( $# )) && … || …：带参的 fc 失败时会落进 || 分支，变成列全部。
+history() { if (( $# )); then builtin fc -l "$@"; else builtin fc -l 1; fi; }
+
 alias sudo='sudo '              # 末尾空格：让 sudo 后面的别名也能展开
 alias pls='eval "sudo $(fc -ln -1)"'           # 用 sudo 重跑上一条
 alias rc='source '
