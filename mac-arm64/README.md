@@ -13,6 +13,27 @@ git clone git@github.com:juserch/.dotfiles.git ~/.dotfiles
 ~/.dotfiles/mac-arm64/install.sh          # 幂等，第二次跑应显示"无变化"
 ```
 
+## ⛔ 宿主只拉取，不提交
+
+本仓**所有提交与推送都在 VM（jserver）里做**，宿主上的 `~/.dotfiles` 只是消费方。
+宿主仓已加两道闸（2026-10-10）：
+
+```
+git config --local user.useConfigOnly true      # 无身份 → git commit 直接报错
+git remote set-url --push origin no_push--commit-in-VM
+git remote set-url --push vm     no_push--commit-in-VM
+```
+
+宿主同步（GitHub 不通时走 VM）：
+
+```bash
+git -C ~/.dotfiles pull --ff-only origin develop   # 或
+git -C ~/.dotfiles pull --ff-only vm develop       # remote vm = jserver:.dotfiles
+```
+
+要改 `mac-arm64/` 下的文件：在 VM 里改、提交、推送，宿主再拉。
+宿主的 zsh/gitconfig 是软链到工作树的，拉下来即生效（新开 shell 或 `zshreload`）。
+
 ## 内容
 
 | 路径 | 装到 | 方式 |
