@@ -96,35 +96,75 @@ export VELTORA_ISSUES_REMOTE=$HOME/.veltora-prod/issues-control/authorities/issu
 export VELTORA_ISSUES_ACTOR=juserch
 
 # ---------- ccrc: 环境配置切换 ----------
-# 三份配置互斥（都设 HTTPS_PROXY），故切换前先清，避免叠加出错。
-#   g  公司内网（经宿主 SOCKS5·需先在宿主跑 intranet on）
-#   o  公网代理     i  iflytek 内网代理     a  仅 ANTHROPIC 网关
+# 档位 = 一个 ~/.ccrc4<名> 文件。⭐ 新增一档只需新建文件，不用改这里的代码。
+#   · 档位名只认 [A-Za-z0-9_-]，所以 ~/.ccrc4o.bak 这类备份自动不算一档
+#   · 说明：文件里写一行 "# ccrc: <说明>"；没有就取第一行注释；注释含 = 的不显示（防凭据）
+#   · 清空：切换前 unset 固定代理/ANTHROPIC 变量，外加**所有档位文件里 export 过的变量**
+#     （各档互斥，不清会叠加）。PATH/HOME 等关键变量即使被 export 也不清
+#   · g 档额外探活宿主 SOCKS5 隧道（需先在宿主跑 intranet on）
+# 档位文件含 token / 代理地址，⛔ 一律不入库。
+_ccrc_names() {
+  [ -n "$ZSH_VERSION" ] && setopt localoptions nullglob
+  local f n
+  for f in "$HOME"/.ccrc4*; do
+    [ -f "$f" ] || continue
+    n=${f##*/.ccrc4}
+    case "$n" in ""|*[!A-Za-z0-9_-]*) continue ;; esac
+    echo "$n"
+  done
+}
+
+_ccrc_desc() {
+  local d
+  d=$(sed -n 's/^#[[:space:]]*ccrc:[[:space:]]*//p' "$1" | head -1)
+  [ -n "$d" ] || d=$(sed -n '1s/^#[[:space:]]*//p' "$1")
+  case "$d" in *=*) d="" ;; esac
+  echo "${d:-（无说明）}"
+}
+
+_ccrc_clr() {
+  local n v
+  unset ALL_PROXY HTTPS_PROXY HTTP_PROXY NO_PROXY all_proxy https_proxy http_proxy no_proxy \
+        ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY
+  for n in $(_ccrc_names); do
+    for v in $(sed -n 's/^[[:space:]]*export[[:space:]][[:space:]]*\([A-Za-z_][A-Za-z_0-9]*\)=.*/\1/p' "$HOME/.ccrc4$n"); do
+      case "$v" in PATH|HOME|USER|SHELL|TERM|LANG|LC_*) continue ;; esac
+      unset "$v"
+    done
+  done
+}
+
 ccrc() {
-  local c="${1:-}"
-  local _clr="unset ALL_PROXY HTTPS_PROXY HTTP_PROXY NO_PROXY no_proxy ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY"
+  local c="${1:-}" n
   case "$c" in
-    "" )
-      echo "用法: ccrc {g|o|i|a|off}"
-      echo "  g   公司内网（SOCKS5 → 宿主，需 intranet on）"
-      echo "  o   公网代理    i   iflytek 代理    a   ANTHROPIC 网关"
-      echo "  off 清空"
+    ""|-h|help )
+      echo "用法: ccrc <档位>|off      （档位 = ~/.ccrc4<名> 文件）"
+      for n in $(_ccrc_names); do printf '  %-5s %s\n' "$n" "$(_ccrc_desc "$HOME/.ccrc4$n")"; done
+      [ -z "$(_ccrc_names)" ] && echo "  （尚无档位文件）"
+      echo "  off   清空"
       echo ""
       echo "当前: ${ALL_PROXY:-${HTTPS_PROXY:-无代理}}"
       [ -n "${ANTHROPIC_BASE_URL:-}" ] && echo "      BASE_URL=$ANTHROPIC_BASE_URL"
       return 0 ;;
-    off ) eval "$_clr"; echo "  已清空代理与 ANTHROPIC 变量" ;;
-    g|o|i|a )
-      [ -f ~/.ccrc4$c ] || { echo "  无 ~/.ccrc4$c"; return 1; }
-      eval "$_clr"; source ~/.ccrc4$c
+    off ) _ccrc_clr; echo "  已清空代理与 ANTHROPIC 变量" ;;
+    * )
+      case "$c" in *[!A-Za-z0-9_-]*) echo "  非法档位名: $c"; return 1 ;; esac
+      [ -f "$HOME/.ccrc4$c" ] || { echo "  无 ~/.ccrc4$c（ccrc 看可用档位）"; return 1; }
+      _ccrc_clr; . "$HOME/.ccrc4$c"
       echo "  → 4$c  ${ALL_PROXY:-${HTTPS_PROXY:-无代理}}"
       [ -n "${ANTHROPIC_BASE_URL:-}" ] && echo "     BASE_URL=$ANTHROPIC_BASE_URL"
       if [ "$c" = g ]; then
         curl -s -o /dev/null -m 6 --proxy socks5h://127.0.0.1:1080 https://one.iflytek.com/ \
           && echo "     隧道通" || echo "     ⚠️ 隧道不通——宿主执行 intranet on"
       fi ;;
-    * ) echo "  未知: $c（用 ccrc 看用法）"; return 1 ;;
   esac
 }
+
+# zsh 补全：档位名随文件动态列出（.chrc 在 antigen apply 之后 source，compdef 已可用）
+if [ -n "$ZSH_VERSION" ] && command -v compdef >/dev/null 2>&1; then
+  _ccrc_comp() { compadd -- off $(_ccrc_names); }
+  compdef _ccrc_comp ccrc
+fi
 
 # ---------- VS Code remote-cli ----------
 # VM 内无 GUI（§3.5：编辑器在 macOS，开发环境在 VM）。VS Code 通过 Remote-SSH 连过来时
@@ -244,6 +284,11 @@ export PATH="$HOME/.local/bin:$PATH"
 #   PATH += /usr/local/go/bin                     Go 的实际安装位置
 #   VELTORA_ISSUES_REMOTE / _ACTOR                指向单个裸仓（手册 C2.4）
 #   多处 command -v 守卫                          工具未装时静默跳过而非报错
+#
+# 改造（2026-10-09）
+#   ccrc         由写死 g/o/i/a 改为扫描 ~/.ccrc4* 动态发现档位；新增一档只需建文件。
+#                清空范围扩到所有档位文件 export 过的变量；加 zsh 补全。
+#                起因：新建的 ~/.ccrc4x 在旧版里调不到。
 #
 # 待装才生效
 #   lk      需 zsh 插件 supercrabtree/k
