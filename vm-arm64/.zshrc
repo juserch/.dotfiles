@@ -39,6 +39,9 @@ export POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true
 # My config
 [ -f ~/.chrc ] && source ~/.chrc
 
+# docsync 凭据（飞书 APP_ID/SECRET），仅本机、不入库
+[ -f ~/.config/docsync/env ] && source ~/.config/docsync/env
+
 # OpenClaw Completion（未装时跳过，避免启动报错）
 [ -f "$HOME/.openclaw/completions/openclaw.zsh" ] && \
   source "$HOME/.openclaw/completions/openclaw.zsh"
@@ -63,4 +66,11 @@ export POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true
 #
 #   openclaw 补全  硬编码路径 /home/juserch/... → $HOME，并加存在性守卫。
 #                  openclaw 尚未安装，无守卫会在每次启动报 no such file。
+#
+#   docsync env   (2026-10-09) source ~/.config/docsync/env，带存在性守卫。
+#                  文件含凭据，只在本机；仓里只有这一行引用。
+#
+#   ccrc 不自动加载 (2026-10-09) 曾在本地直接 source ~/.ccrc4o（未入库），
+#                  使每个 shell 默认带公网代理。已撤回：代理一律用 ccrc {o|i|a|g}
+#                  手动切换，默认无代理。
 # =====================================================================
