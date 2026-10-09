@@ -1,6 +1,6 @@
 # ~/.zshrc.local — 本机私有配置，由 ~/.zshrc 末行 source。
 # 来源：guest（jserver）的 ~/.dotfiles/vm-arm64/.chrc，按 macOS/BSD 语义改写。
-# 评估与决策见 ~/iuser/workspace/icode/ienv/shell/host-shell-assessment.md（D3–D6）。
+# 评估与决策见 ~/iuser/workspace/icode/ienv/endpoint/host-shell-assessment.md（D3–D6）。
 # 未移植的部分：p10k / zsh-vi-mode / ccrc() / code()（D8·D10·§2.4），刻意不引。
 
 # ══ fzf ════════════════════════════════════════════════════════════════════

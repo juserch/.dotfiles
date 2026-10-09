@@ -44,6 +44,9 @@ _copy() {
 echo "▸ zsh（软链）"
 for f in .zshenv .zprofile .zshrc .zshrc.local; do _link "$f" "$HOME/$f"; done
 
+echo "▸ git（软链）"
+_link .gitconfig "$HOME/.gitconfig"
+
 echo "▸ 脚本与 profile（软链）"
 _link bin/jserver-vm   "$HOME/.local/bin/jserver-vm"
 _link iterm2/jserver.json \

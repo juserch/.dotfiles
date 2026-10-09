@@ -18,6 +18,7 @@ git clone git@github.com:juserch/.dotfiles.git ~/.dotfiles
 | 路径 | 装到 | 方式 |
 |---|---|---|
 | `.zshenv` `.zprofile` `.zshrc` `.zshrc.local` | `~/` | 软链 |
+| `.gitconfig` | `~/` | 软链（⛔ 无 `[user]`，宿主不设全局身份） |
 | `bin/jserver-vm` | `~/.local/bin/` | 软链 |
 | `iterm2/jserver.json` | `~/Library/Application Support/iTerm2/DynamicProfiles/` | 软链 |
 | `vscode/settings*.json` | Code / Code - Insiders 的 `User/` | **拷贝** |

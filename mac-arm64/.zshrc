@@ -39,6 +39,10 @@ export EDITOR=${EDITOR:-vim}
 # brew 装的包会把补全函数丢在这里（git、brew 自身等）
 [[ -d /opt/homebrew/share/zsh/site-functions ]] && \
   fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
+# brew 的 zsh-completions 不进 site-functions，单独放在这里（对应 guest 的同名 antigen bundle）。
+# 新装后 .zcompdump 有 24h 缓存，要立即生效须 rm ~/.zcompdump 再开新 shell。
+[[ -d /opt/homebrew/share/zsh-completions ]] && \
+  fpath=(/opt/homebrew/share/zsh-completions $fpath)
 
 autoload -Uz compinit
 # 完整的 fpath 安全检查每天只做一次，其余时间直接读缓存，省掉启动开销

@@ -1,0 +1,19 @@
+# ~/.gitconfig — 宿主（macOS）全局 git 配置，由 install.sh 软链到 $HOME。
+# ⛔ 刻意不设 [user]：宿主无全局 git identity，每个仓用 git config --local 显式设置，
+#    避免用错身份提交（见 icode/CLAUDE.md「硬约束」）。vm-arm64/.gitconfig 的 [user] 不要带过来。
+
+[core]
+	quotepath = false                       # 中文文件名不转成 \344\270\255 八进制
+	excludesfile = ~/.config/git/ignore     # 全局忽略（.DS_Store 等本机产物）
+[init]
+	defaultBranch = main
+[pull]
+	rebase = true
+[diff]
+	algorithm = histogram
+
+# =====================================================================
+# CHANGES（2026-10-09）
+#   新纳管。原 ~/.gitconfig 只有 core 两项，且 excludesfile 写死 /Users/TWQ2P73VFL/...，
+#   改为 ~/ 以便换机。init/pull/diff 三项取自 vm-arm64/.gitconfig，两边语义对齐。
+# =====================================================================
