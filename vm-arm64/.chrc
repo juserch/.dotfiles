@@ -95,6 +95,16 @@ export OLLAMA_HOST=192.168.64.1:11434
 export VELTORA_ISSUES_REMOTE=$HOME/.veltora-prod/issues-control/authorities/issues.git
 export VELTORA_ISSUES_ACTOR=juserch
 
+# ---------- k3s ----------
+# /usr/local/bin/kubectl 是 k3s 多合一二进制的软链。普通用户运行时：
+#   ① 不读 ~/.kube/config，去锁 /etc/rancher/k3s/k3s.yaml → permission denied；
+#   ② 在 ~/.rancher/k3s/data 解包约 220M。
+# 两个变量都设才正常（ienv k8s/k3s-starrocks-quickstart-design.md §2.4，2026-10-13 实测）。
+if [ -d /data/k3s ]; then
+  export KUBECONFIG=$HOME/.kube/config
+  export K3S_DATA_DIR=/data/k3s
+fi
+
 # ---------- ccrc: 环境配置切换 ----------
 # 档位 = 一个 ~/.ccrc4<名> 文件。⭐ 新增一档只需新建文件，不用改这里的代码。
 #   · 档位名只认 [A-Za-z0-9_-]，所以 ~/.ccrc4o.bak 这类备份自动不算一档
@@ -289,6 +299,10 @@ export PATH="$HOME/.local/bin:$PATH"
 #   ccrc         由写死 g/o/i/a 改为扫描 ~/.ccrc4* 动态发现档位；新增一档只需建文件。
 #                清空范围扩到所有档位文件 export 过的变量；加 zsh 补全。
 #                起因：新建的 ~/.ccrc4x 在旧版里调不到。
+#
+# 新增（2026-10-13）
+#   KUBECONFIG / K3S_DATA_DIR                     k3s 装在 /data/k3s；不设则普通用户 kubectl 报错并往 ~ 解包 220M。
+#                                                 有 /data/k3s 才导出，没装 k3s 的机器不受影响。
 #
 # 待装才生效
 #   lk      需 zsh 插件 supercrabtree/k
