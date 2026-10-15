@@ -1,0 +1,10 @@
+[Unit]
+Description=Run vscode-server-selfheal every 30s
+
+[Timer]
+OnStartupSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

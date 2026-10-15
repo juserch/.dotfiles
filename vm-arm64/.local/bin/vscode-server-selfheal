@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# vscode-server-selfheal —— VS Code Remote-SSH 的 server 入口 socket 被删后自愈
+#
+# 症状（宿主侧）：连 jserver 报
+#   Failed to connect to the remote extension host server
+#   (Error: CodeError(AsyncPipeFailed(Os { code: 2, kind: NotFound, ... })))
+#   多在休眠 / 切网之后出现 —— 那只是迫使客户端重连的时刻，不是成因。
+#
+# 机制（2026-10-15 实测）：VS Code CLI 只凭 pid.txt 判断 server「在跑」，再去连 log.txt 里
+#   记下的 /tmp/code-insiders-<uuid>。这个 socket 文件一旦被删（当天是一次测试执行了
+#   remove_dir_all("/tmp")），server 进程照样活着、已建立的连接照常工作；但此后每一次新连接
+#   都是 ENOENT，CLI 不会换一个 server，只能手动「Remote-SSH: Kill VS Code Server on Host」。
+#
+# 处置：
+#   ① 孤儿 server：它监听的入口 socket（<tmp>/code[-insiders]-<uuid>）路径已不存在
+#      · 没有来自别的会话的活连接 → 结束该会话里的 VS Code 进程（等同 Kill VS Code Server on Host）
+#      · 还有活窗口连着           → 只把它的 pid.txt 挪开：下一次连接由 CLI 直接拉起新 server，
+#                                   正在用的窗口不受打扰；等它们都断开，下一轮再结束它
+#   ② pid.txt 里的 pid 还活着、但已不是这个 server（重启后 pid 被复用）→ 挪开 pid.txt
+#
+# 触发：~/.ssh/rc（每次 SSH 登录前）＋ systemd user timer（每 30 秒，覆盖复用已有 SSH 隧道的重连）
+# 日志：~/.cache/vscode-server-selfheal.log —— 只记处置动作，健康时什么都不写
+# 演练：vscode-server-selfheal --dry-run   （只打印判断，不动任何东西）
+set -u
+
+DRY=0
+[ "${1:-}" = "--dry-run" ] && DRY=1
+SOURCE=${VSCODE_SELFHEAL_SOURCE:-manual}
+BASES=${VSCODE_SELFHEAL_BASES:-"$HOME/.vscode-server-insiders $HOME/.vscode-server"}
+LOG=${VSCODE_SELFHEAL_LOG:-"$HOME/.cache/vscode-server-selfheal.log"}
+ENTRY_RE='/code(-insiders)?-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+mkdir -p "$(dirname "$LOG")"
+exec 9>"${LOG%.log}.lock"
+flock -n 9 || exit 0   # ssh rc 与 timer 撞上时，让先到的那个做
+
+say() {
+    if [ "$DRY" -eq 1 ]; then printf 'DRY  %s\n' "$*"
+    else printf '%s [%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SOURCE" "$*" >> "$LOG"; fi
+}
+cmdline() { tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null; }
+sid_of()  { ps -o sid= -p "$1" 2>/dev/null | tr -d ' '; }
+under_base() {  # <pid>：命令行是否落在某个 VS Code server 根目录下
+    local cmd b
+    cmd=$(cmdline "$1") || return 1
+    for b in $BASES; do case "$cmd" in *"$b/"*) return 0 ;; esac; done
+    return 1
+}
+
+# 已建立的 unix 连接。服务端那一侧的「本地地址」显示监听时绑定的名字（即使路径已被删），
+# 客户端那一侧本地地址是 *，第 5 列是 inode —— 据此反查对端进程。
+EST=$(ss -xHnp state established 2>/dev/null)
+external_clients() {  # <path> <sid>：该监听路径上、对端不在同一会话里的连接数
+    local n=0 peer ppid
+    for peer in $(awk -v p="$1" '$4 == p { print $7 }' <<<"$EST"); do
+        [ "$peer" = 0 ] && continue        # 对端已关闭、只剩服务端这一头没收（合成测试 B 实测）
+        ppid=$(awk -v i="$peer" '$5 == i { if (match($0, /pid=[0-9]+/)) { print substr($0, RSTART+4, RLENGTH-4); exit } }' <<<"$EST")
+        # 同一会话内部的连接（如 agent host 连自己拉起的 server）不算窗口；对端查不到的保守算作窗口
+        [ -n "$ppid" ] && [ "$(sid_of "$ppid")" = "$2" ] && continue
+        n=$((n + 1))
+    done
+    echo "$n"
+}
+
+# ① 孤儿入口 socket：ss 仍看得到监听（按绑定名显示），文件系统上却已没有这个路径
+declare -A ORPHAN=()
+while read -r path pid; do
+    [ -e "$path" ] && continue
+    under_base "$pid" || continue
+    sid=$(sid_of "$pid")
+    [ -n "$sid" ] && [ "$sid" -gt 1 ] || continue
+    ORPHAN[$sid]="${ORPHAN[$sid]:-} $path"
+done < <(ss -xHnp state listening 2>/dev/null |
+         awk -v re="$ENTRY_RE" '$4 ~ re { if (match($0, /pid=[0-9]+/)) print $4, substr($0, RSTART+4, RLENGTH-4) }')
+
+for sid in "${!ORPHAN[@]}"; do
+    n=0
+    for p in ${ORPHAN[$sid]}; do n=$((n + $(external_clients "$p" "$sid"))); done
+    if [ "$n" -eq 0 ]; then
+        say "sid=$sid entry socket gone:${ORPHAN[$sid]} ; no live client -> terminating its VS Code processes"
+        [ "$DRY" -eq 1 ] && continue
+        for b in $BASES; do pkill -TERM -s "$sid" -f "$b/" 2>/dev/null; done
+        for _ in 1 2 3 4 5; do
+            alive=0
+            for b in $BASES; do pgrep -s "$sid" -f "$b/" >/dev/null 2>&1 && alive=1; done
+            [ "$alive" -eq 0 ] && break
+            sleep 1
+        done
+        if [ "$alive" -eq 1 ]; then
+            for b in $BASES; do pkill -KILL -s "$sid" -f "$b/" 2>/dev/null; done
+            say "sid=$sid still alive after 5s -> SIGKILL"
+        fi
+    else
+        # 还有窗口连着：只挪开 pid.txt，不打断它们
+        for b in $BASES; do
+            for pf in "$b"/cli/servers/*/pid.txt; do
+                [ -f "$pf" ] || continue
+                spid=$(cat "$pf" 2>/dev/null)
+                [ -n "$spid" ] && [ "$(sid_of "$spid")" = "$sid" ] || continue
+                say "sid=$sid entry socket gone but $n live client(s) -> moving $pf aside; next connection starts a fresh server"
+                [ "$DRY" -eq 1 ] || mv -f "$pf" "$pf.orphaned-$(date -u +%Y%m%dT%H%M%SZ)"
+            done
+        done
+    fi
+done
+
+# ② pid.txt 指向的进程还活着但已不是这个 server（pid 复用）
+for b in $BASES; do
+    for pf in "$b"/cli/servers/*/pid.txt; do
+        [ -f "$pf" ] || continue
+        spid=$(cat "$pf" 2>/dev/null)
+        [ -n "$spid" ] && [ -r "/proc/$spid/cmdline" ] || continue   # 进程已不在：CLI 自己会重拉
+        case "$(cmdline "$spid")" in *"${pf%/pid.txt}/server/"*) continue ;; esac
+        say "$pf -> pid $spid is not this server (reused after reboot?) -> moving it aside"
+        [ "$DRY" -eq 1 ] || mv -f "$pf" "$pf.stale-$(date -u +%Y%m%dT%H%M%SZ)"
+    done
+    # 挪开的记录：对应进程已结束（或本就不是 server）就清掉
+    for pf in "$b"/cli/servers/*/pid.txt.orphaned-* "$b"/cli/servers/*/pid.txt.stale-*; do
+        [ -f "$pf" ] || continue
+        spid=$(cat "$pf" 2>/dev/null)
+        [ -n "$spid" ] && [ -r "/proc/$spid/cmdline" ] && under_base "$spid" && continue
+        [ "$DRY" -eq 1 ] || rm -f "$pf"
+    done
+done
+exit 0

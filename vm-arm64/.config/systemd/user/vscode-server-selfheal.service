@@ -1,0 +1,9 @@
+[Unit]
+Description=VS Code server entry-socket self-heal (see ~/.local/bin/vscode-server-selfheal)
+
+[Service]
+Type=oneshot
+Environment=VSCODE_SELFHEAL_SOURCE=timer
+ExecStart=%h/.local/bin/vscode-server-selfheal
+# 每 30 秒一次，别让「Starting / Finished」刷屏 journal；处置动作记在 ~/.cache/vscode-server-selfheal.log
+LogLevelMax=warning
