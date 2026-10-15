@@ -236,3 +236,7 @@ _brew_share=${HOMEBREW_PREFIX:-/opt/homebrew}/share
 [[ -r $_brew_share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && \
   source $_brew_share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 unset _brew_share
+
+#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
