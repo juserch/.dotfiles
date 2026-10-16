@@ -1,0 +1,17 @@
+#!/bin/sh
+# cargo —— 把每次构建放进 build.slice，和 VS Code server 隔开（PATH 里排在 ~/.cargo/bin 前面）
+#
+# 为什么（2026-10-16 实测）：构建和 VS Code server 原本在同一个 ssh 会话 cgroup 里，
+#   cargo 默认按核数并行，10 个 ld 加 10 个 rustc 一起跑，CPU 和内存同时被打满，
+#   VS Code server 被饿到发不出心跳，窗口断线、Reload 卡住；还引发全局 OOM，杀掉了 prometheus。
+# 怎么做：systemd-run --user --scope 原地执行真正的 cargo（同一个进程，环境、目录、输入输出、
+#   退出码、信号都不变），rustc / ld 作为子进程自动进同一个组。
+#   build.slice 的限额在 ~/.config/systemd/user/build.slice。
+# 兜底：systemd 用户实例连不上，或已经在 build.slice 里（嵌套调用），就直接执行真正的 cargo。
+REAL=${VM_BUILD_REAL:-"$HOME/.cargo/bin/cargo"}
+if [ -z "${VM_BUILD_SLICE:-}" ] && command -v systemd-run >/dev/null 2>&1 \
+   && systemctl --user show-environment >/dev/null 2>&1; then
+    VM_BUILD_SLICE=1 exec systemd-run --user --scope --quiet --collect --slice=build.slice \
+        -- "$REAL" "$@"
+fi
+exec "$REAL" "$@"

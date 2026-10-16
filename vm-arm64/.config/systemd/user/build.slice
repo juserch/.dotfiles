@@ -1,0 +1,13 @@
+[Unit]
+Description=Builds (cargo), isolated from VS Code server and capped (see ~/.local/bin/cargo)
+
+[Slice]
+# 内存：超过 MemoryHigh 只回收、换出本组自己的页，构建变慢但不挤别人；
+# 到 MemoryMax 就在本组内 OOM（被杀的是构建，不是 VS Code 或公共服务）。
+# 数字依据（ienv jserver-infra.md §3）：VM 可见 26.8G，基建实际约 8.2G，VS Code 加 Claude 会话约 5G。
+MemoryHigh=10G
+MemoryMax=12G
+# swap 只给 2G：防止构建把 8G swap 占满后，别人的页换不出去
+MemorySwapMax=2G
+# CPU：和用户实例里的其他组争抢时让出；与 VS Code 的隔离主要靠「不在同一个 cgroup」
+CPUWeight=20
