@@ -6,12 +6,13 @@
 #   VS Code server 被饿到发不出心跳，窗口断线、Reload 卡住；还引发全局 OOM，杀掉了 prometheus。
 # 怎么做：systemd-run --user --scope 原地执行真正的 cargo（同一个进程，环境、目录、输入输出、
 #   退出码、信号都不变），rustc / ld 作为子进程自动进同一个组。
-#   build.slice 的限额在 ~/.config/systemd/user/build.slice。
+#   build.slice 的限额在 ~/.config/systemd/user/build.slice。OOMPolicy=kill：组内一旦 OOM，
+#   这一次 cargo 调用的所有进程一起结束（否则 cargo 会等其余链接器跑完，内存继续被占着）。
 # 兜底：systemd 用户实例连不上，或已经在 build.slice 里（嵌套调用），就直接执行真正的 cargo。
 REAL=${VM_BUILD_REAL:-"$HOME/.cargo/bin/cargo"}
 if [ -z "${VM_BUILD_SLICE:-}" ] && command -v systemd-run >/dev/null 2>&1 \
    && systemctl --user show-environment >/dev/null 2>&1; then
     VM_BUILD_SLICE=1 exec systemd-run --user --scope --quiet --collect --slice=build.slice \
-        -- "$REAL" "$@"
+        -p OOMPolicy=kill -- "$REAL" "$@"
 fi
 exec "$REAL" "$@"

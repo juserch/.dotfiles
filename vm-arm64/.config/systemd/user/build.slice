@@ -2,13 +2,14 @@
 Description=Builds (cargo), isolated from VS Code server and capped (see ~/.local/bin/cargo)
 
 [Slice]
-# 内存：超过 MemoryHigh 只回收、换出本组自己的页，构建变慢但不挤别人；
-# 到 MemoryMax 就在本组内 OOM（被杀的是构建，不是 VS Code 或公共服务）。
+# 内存：只设硬上限，超过就在本组内 OOM；包装脚本给每次 cargo 调用设了 OOMPolicy=kill，
+# 这一次调用的所有进程会一起结束，内存一次性释放（被杀的是构建，不是 VS Code 或公共服务）。
 # 数字依据（2026-10-16 实测）：VM 可见 26.8G；构建以外的部分（k8s 7.1G + system 4.4G + VS Code 会话 4.4G）共约 16G。
-# 构建组上限 10G + 16G = 26G，在 26.8G 以内，VS Code 不被挤才有保证。
-# 初版 10G / 12G 不成立：构建卡在 10G 时，VS Code 组的内存压力到 11.9%，可用内存只剩 2G；限速线降到 8G 后回落到 2%。
-MemoryHigh=8G
-MemoryMax=10G
+# 9G + 16G = 25G，给页缓存留约 1.8G。
+# 为什么不设限速线（MemoryHigh）：实测 swap 用光后，构建卡在限速线和上限之间，既降不下来也不会被杀，
+# 只用半个核慢慢爬，一直占着 9.8G，VS Code 组持续约 10% 的内存压力。
+MemoryHigh=infinity
+MemoryMax=9G
 # swap 只给 2G：防止构建把 8G swap 占满后，别人的页换不出去
 MemorySwapMax=2G
 # CPU：和用户实例里的其他组争抢时让出；与 VS Code 的隔离主要靠「不在同一个 cgroup」
