@@ -10,6 +10,11 @@
 #   这一次 cargo 调用的所有进程一起结束（否则 cargo 会等其余链接器跑完，内存继续被占着）。
 # 兜底：systemd 用户实例连不上，或已经在 build.slice 里（嵌套调用），就直接执行真正的 cargo。
 REAL=${VM_BUILD_REAL:-"$HOME/.cargo/bin/cargo"}
+# 并行度默认 4（和各仓门禁、branch-model.sh 的 CARGO_BUILD_JOBS=4 一致）。
+#   为什么（2026-10-29 01:00 UTC 实测）：门禁里设了 4，但直接敲的 cargo test 不经过门禁，cargo 按核数开 10 路，
+#   一次 cargo test -p veltora-code-coding-core 同时跑 10 个链接（每个约 800M），build.slice 顶到 9G，
+#   全机 memory PSI some avg60 50%、full 30%，swap 用光。调用方自己设了 CARGO_BUILD_JOBS 或传 -j 时仍以调用方为准。
+: "${CARGO_BUILD_JOBS:=4}"; export CARGO_BUILD_JOBS
 if [ -z "${VM_BUILD_SLICE:-}" ] && command -v systemd-run >/dev/null 2>&1 \
    && systemctl --user show-environment >/dev/null 2>&1; then
     VM_BUILD_SLICE=1 exec systemd-run --user --scope --quiet --collect --slice=build.slice \
