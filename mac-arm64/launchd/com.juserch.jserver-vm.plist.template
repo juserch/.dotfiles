@@ -12,6 +12,8 @@
   <key>RunAtLoad</key>          <true/>
   <key>KeepAlive</key>          <false/>
   <key>ProcessType</key>        <string>Background</string>
+  <!-- 脚本退出后留下 caffeinate（睡眠断言）；不加则 launchd 连同进程组一起杀（2026-11-01 实测） -->
+  <key>AbandonProcessGroup</key> <true/>
   <key>StandardOutPath</key>    <string>$HOME/Library/Logs/jserver-vm.log</string>
   <key>StandardErrorPath</key>  <string>$HOME/Library/Logs/jserver-vm.log</string>
 </dict>

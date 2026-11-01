@@ -28,11 +28,14 @@ _ssh_up() { nc -z -G 2 "$HOST" 22 >/dev/null 2>&1; }
 # 宿主一睡，VM 会被一并挂起（实测 status=paused、ssh 卡死）。本机 pmset 是
 # `sleep 1`——闲置 1 分钟就睡。故 VM 在跑期间持有一个睡眠断言，用 -w 绑到 UTM 进程：
 # UTM 退出，caffeinate 自己也退出，不会留下"永不睡眠"的残留。
-# ⚠️ caffeinate -s 只在接电源时生效；电池供电仍会正常睡眠，不影响续航。
+# ⚠️ -i 不分电源：UTM 开着时用电池也不会闲置睡眠（更耗电）；-s 只在接电源时生效。
+#    两者都挡不住电池下合盖 —— 那时 VM 照样挂起（2026-11-01 订正，原注释说电池下照常睡）。
+# ⚠️ 由 LaunchAgent 调用时 plist 必须带 AbandonProcessGroup，否则脚本一退出，launchd
+#    就把同进程组的 caffeinate 一起杀掉（2026-11-01 实测）。
 _hold_awake() {
   pgrep -f "caffeinate -i -s -w" >/dev/null && return 0
   local pid; pid=$(pgrep -x UTM | head -1)
-  [ -n "$pid" ] || return 0
+  [ -n "$pid" ] || { echo "  ⚠️ 没找到 UTM 进程，未持睡眠断言"; return 0; }
   nohup caffeinate -i -s -w "$pid" >/dev/null 2>&1 &
   echo "  已持睡眠断言（绑定 UTM pid ${pid}）"
 }
@@ -45,23 +48,31 @@ _wait_state() {                       # $1=期望状态 $2=最多等几秒
 
 case "${1:-status}" in
   on|start)
-    if [ "$(_status)" = started ]; then
+    st=$(_status)
+    if [ "$st" = started ]; then
       echo "  VM 已在运行"
+    elif [ -z "$st" ] && _ssh_up; then
+      # 2026-11-01 实测：UTM 的脚本接口可能一台 VM 也列不出（utmctl list 为空），VM 却在跑。
+      # 以 ssh 通为准，别对在跑的 VM 再发 start
+      echo "  VM 已在运行（utmctl 查不到，按 ssh 通判定）"
     else
       # UTM 未运行时这行会连带把 UTM 拉起来，并打两行 -10004——属正常，忽略
       "$UTMCTL" start "$VM" --hide >/dev/null 2>&1
       if ! _wait_state started 30; then
         "$UTMCTL" start "$VM" --hide >/dev/null 2>&1    # UTM 冷启那次常常没接住，重发一次
-        _wait_state started 30 || { echo "  ⚠️ 启动失败（status=$(_status)）"; exit 1; }
+        # 不在这里退出：10-26 登录时就是在这里判「启动失败」退出、没走到 _hold_awake，
+        # 而 VM 两分钟后其实起来了 —— 断言丢了 6 天。成败最终以 ssh 判
+        _wait_state started 30 || echo "  ⚠️ utmctl 没报 started（status=$(_status)），改等 ssh"
+      else
+        echo "  已后台启动（UTM 主窗口隐藏）"
       fi
-      echo "  已后台启动（UTM 主窗口隐藏）"
     fi
     _hold_awake
-    for _ in $(seq 1 60); do
+    for _ in $(seq 1 90); do
       _ssh_up && { echo "  ssh 就绪 → $HOST"; exit 0; }
       sleep 2
     done
-    echo "  ⚠️ 120s 内 ssh 未就绪，用 utmctl attach 看串口"; exit 1 ;;
+    echo "  ⚠️ 180s 内 ssh 未就绪，用 utmctl attach 看串口"; exit 1 ;;
   off|stop) "$UTMCTL" stop "$VM" >/dev/null 2>&1
             _wait_state stopped 60
             echo "  VM: $(_status)" ;;

@@ -68,4 +68,8 @@ git -C ~/.dotfiles pull --ff-only vm develop       # remote vm = jserver:.dotfil
 * **`utmctl` 把错误打在 stdout 且退出码恒为 0**——判成败只能回查 `status`。
 * **宿主睡眠会挂起 VM**（本机 `pmset sleep 1`）。`jserver-vm` 用
   `caffeinate -i -s -w <UTM pid>` 持断言；只用 `-s` 挡不住闲置睡眠。
+  `-i` 在电池下也生效（UTM 开着就不闲置睡），电池下合盖两者都挡不住。
+* **LaunchAgent 要带 `AbandonProcessGroup`**——否则脚本退出时 launchd 连 caffeinate 一起杀，
+  登录自启从来挂不住断言。2026-10-26 宿主重启后断言丢了 6 天，VM 冻住 48% 的时间
+  （另一半原因：登录时 `utmctl status` 为空、脚本判失败提前退出，已改为以 ssh 判活）。
 * **`$var` 后紧跟全角标点**会被 bash 吃进变量名，中文输出里一律写 `${var}`。
