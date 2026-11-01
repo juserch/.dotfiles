@@ -32,8 +32,9 @@ _ssh_up() { nc -z -G 2 "$HOST" 22 >/dev/null 2>&1; }
 #    两者都挡不住电池下合盖 —— 那时 VM 照样挂起（2026-11-01 订正，原注释说电池下照常睡）。
 # ⚠️ 由 LaunchAgent 调用时 plist 必须带 AbandonProcessGroup，否则脚本一退出，launchd
 #    就把同进程组的 caffeinate 一起杀掉（2026-11-01 实测）。
+# pgrep 锚定行首：不锚时，命令行里带这串字的任何进程（如别人的 shell）都会被当成断言已持有
 _hold_awake() {
-  pgrep -f "caffeinate -i -s -w" >/dev/null && return 0
+  pgrep -f '^(/usr/bin/)?caffeinate -i -s -w' >/dev/null && return 0
   local pid; pid=$(pgrep -x UTM | head -1)
   [ -n "$pid" ] || { echo "  ⚠️ 没找到 UTM 进程，未持睡眠断言"; return 0; }
   nohup caffeinate -i -s -w "$pid" >/dev/null 2>&1 &
@@ -81,7 +82,7 @@ case "${1:-status}" in
   status)   echo "  UTM: $(pgrep -x UTM >/dev/null && echo 运行中 || echo 未运行)"
             echo "  VM : $(_status)"
             _ssh_up && echo "  ssh: 通" || echo "  ssh: 不通"
-            pgrep -f "caffeinate -i -s -w" >/dev/null \
+            pgrep -f '^(/usr/bin/)?caffeinate -i -s -w' >/dev/null \
               && echo "  睡眠断言: 已持有" || echo "  睡眠断言: 无（宿主睡眠会挂起 VM）" ;;
   *) echo "用法: jserver-vm {start|stop|suspend|status}"; exit 1 ;;
 esac
