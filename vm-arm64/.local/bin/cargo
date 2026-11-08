@@ -15,6 +15,15 @@ REAL=${VM_BUILD_REAL:-"$HOME/.cargo/bin/cargo"}
 #   一次 cargo test -p veltora-code-coding-core 同时跑 10 个链接（每个约 800M），build.slice 顶到 9G，
 #   全机 memory PSI some avg60 50%、full 30%，swap 用光。调用方自己设了 CARGO_BUILD_JOBS 或传 -j 时仍以调用方为准。
 : "${CARGO_BUILD_JOBS:=4}"; export CARGO_BUILD_JOBS
+# 只读子命令不进 build.slice：它们不编译，实测 metadata/tree 约 100M、0.1–0.2 秒。
+#   为什么（2026-11-06 实测，Issue 01M6RB14）：门禁里的 cargo metadata / cargo tree 原本也被放进 build.slice，
+#   并发构建把它顶满（memory.events max 8770 万次、oom_kill 204），它们卡在组内回收里 120–900 秒后超时，
+#   被记成红，把一次只改文档的落地整组回滚。它们和构建抢 5G 没有任何好处。
+_sub=${1:-}; case "$_sub" in +*) _sub=${2:-} ;; esac
+case "$_sub" in
+    metadata|tree|locate-project|pkgid|read-manifest|verify-project|version|help|-V|--version|-h|--help)
+        exec "$REAL" "$@" ;;
+esac
 if [ -z "${VM_BUILD_SLICE:-}" ] && command -v systemd-run >/dev/null 2>&1 \
    && systemctl --user show-environment >/dev/null 2>&1; then
     VM_BUILD_SLICE=1 exec systemd-run --user --scope --quiet --collect --slice=build.slice \
