@@ -1,5 +1,11 @@
 #!/bin/sh
+# veltora-slot-protocol: 1
 # cargo —— 把每次构建放进 build.slice，和 VS Code server 隔开（PATH 里排在 ~/.cargo/bin 前面）
+#
+# 能力查询（2026-11-08，veltora Issue 01M6XNJ6）：`cargo --veltora-slot-protocol` 打印协议版本后以 0 退出，
+#   不排队、不进 build.slice、不调用真 cargo。上面那行注释与它同值，⛔ 改脚本时两处一起留着、一起改。
+#   版本 1 = CARGO_SLOT_ACQUIRED_FILE 现在的语义（5 个启动点写 Unix 秒、只认第一次、写失败不影响构建）；语义一变就升版本。
+[ "${1:-}" = --veltora-slot-protocol ] && { echo 1; exit 0; }
 #
 # 为什么（2026-10-16 实测）：构建和 VS Code server 原本在同一个 ssh 会话 cgroup 里，
 #   cargo 默认按核数并行，10 个 ld 加 10 个 rustc 一起跑，CPU 和内存同时被打满，
