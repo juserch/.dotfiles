@@ -24,9 +24,90 @@ case "$_sub" in
     metadata|tree|locate-project|pkgid|read-manifest|verify-project|version|help|-V|--version|-h|--help)
         exec "$REAL" "$@" ;;
 esac
-if [ -z "${VM_BUILD_SLICE:-}" ] && command -v systemd-run >/dev/null 2>&1 \
-   && systemctl --user show-environment >/dev/null 2>&1; then
-    VM_BUILD_SLICE=1 exec systemd-run --user --scope --quiet --collect --slice=build.slice \
-        -p OOMPolicy=kill -- "$REAL" "$@"
+# 嵌套调用（已在 build.slice 里）：不进组、不排队，否则自己等自己。
+[ -n "${VM_BUILD_SLICE:-}" ] && exec "$REAL" "$@"
+if command -v systemd-run >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    set -- systemd-run --user --scope --quiet --collect --slice=build.slice -p OOMPolicy=kill -- "$REAL" "$@"
+    export VM_BUILD_SLICE=1
+else
+    set -- "$REAL" "$@"
 fi
-exec "$REAL" "$@"
+# 不编译的子命令不排队，直接跑。
+case "$_sub" in
+    fmt|clean|update|fetch|generate-lockfile|add|remove|search|login|logout|owner|yank|config|info|report|init|new)
+        exec "$@" ;;
+esac
+
+# 构建排队：同时最多 2 个构建，本地大模型窗口开着时 1 个；land 优先。
+#   为什么（2026-11-08，ienv/ci/README.md §10 第 2 条，veltora 同意）：所有构建共用 build.slice 的 9G（窗口 5G），
+#   10-26 起被 OOM 结束累计 327 次 —— 并发靠 OOM 限流，结束一次就白编一次。
+#   名额：窗口信号 /data/infra/llm-window 第一个词是 open 时 1 个，否则 2 个（VM_BUILD_SLOTS 可覆盖，测试用）。
+#   land 优先：带 VELTORA_LAND_GATE=1 的调用（veltora 的单仓与批量合入，门禁里的 cargo 都继承它）排队时留一个标记，
+#     有 land 在等，别的调用就不去抢空出来的名额。不抢占：land 仍要等正在跑的构建结束。
+#   锁：flock 加在名额文件上，由本脚本持有；真正的 cargo 启动时关掉这个 fd（9>&-），
+#     构建里起的常驻进程带不走锁。本脚本留在前台等 cargo 结束并转发信号，timeout / kill 打在本脚本上 cargo 也会结束。
+_dir=${VM_BUILD_SLOT_DIR:-}
+if [ -z "$_dir" ]; then
+    if [ -d "/run/user/$(id -u)" ]; then _dir=/run/user/$(id -u)/cargo-slots; else _dir=/tmp/cargo-slots-$(id -u); fi
+fi
+mkdir -p "$_dir" 2>/dev/null || exec "$@"     # 建不了目录就不排队，别让构建跑不起来
+
+_slots() {
+    [ -n "${VM_BUILD_SLOTS:-}" ] && { echo "$VM_BUILD_SLOTS"; return; }
+    read -r _w _rest < /data/infra/llm-window 2>/dev/null || _w=
+    if [ "$_w" = open ]; then echo 1; else echo 2; fi
+}
+_land_waiting() {    # 有活着的 land 在等就返回 0
+    for _m in "$_dir"/land-wait.*; do
+        [ -e "$_m" ] || continue
+        kill -0 "${_m##*.}" 2>/dev/null && return 0
+        rm -f "$_m"
+    done
+    return 1
+}
+_holders() {
+    for _f in "$_dir"/slot-*.who; do
+        [ -e "$_f" ] || continue
+        read -r _p _rest < "$_f" 2>/dev/null || continue
+        kill -0 "$_p" 2>/dev/null && printf '  %s\n' "$_rest"
+    done
+}
+_run() {    # $1 = 名额文件；拿到锁就跑并以 cargo 的退出码结束本脚本，拿不到返回 1
+    _slot=$1; shift
+    exec 9>>"$_slot"
+    if ! flock -n 9; then exec 9>&-; return 1; fi
+    rm -f "$_dir/land-wait.$$"
+    printf '%s %s %s  %s\n' "$$" "$(date -u +%H:%M:%SZ)" "${VELTORA_LAND_GATE:+[land] }$(pwd)" "cargo $_sub" > "$_slot.who"
+    # 后台命令的 stdin 会先被换成 /dev/null（没有作业控制时 POSIX 的规定），所以从 fd 8 还原
+    "$@" 0<&8 8<&- 9>&- &
+    _child=$!
+    trap 'kill -s TERM "$_child" 2>/dev/null' TERM HUP
+    trap 'kill -s INT "$_child" 2>/dev/null' INT
+    while :; do
+        wait "$_child"; _rc=$?
+        kill -0 "$_child" 2>/dev/null || break
+    done
+    exit "$_rc"
+}
+
+exec 8<&0
+_land=; [ "${VELTORA_LAND_GATE:-}" = 1 ] && _land=1
+[ -n "$_land" ] && : > "$_dir/land-wait.$$" && trap 'rm -f "$_dir/land-wait.$$"; exit 130' INT TERM HUP
+_said=0; _t=0
+while :; do
+    _n=$(_slots)
+    if [ -n "$_land" ] || ! _land_waiting; then
+        _i=1
+        while [ "$_i" -le "$_n" ]; do
+            _run "$_dir/slot-$_i" "$@"
+            _i=$((_i + 1))
+        done
+    fi
+    if [ "$_said" = 0 ] || [ "$_t" -ge 60 ]; then
+        printf 'cargo: 排队等构建名额（共 %s 个%s%s），正在跑：\n' "$_n" \
+            "$([ "$_n" = 1 ] && echo '，本地大模型窗口开着')" "$([ -n "$_land" ] && echo '，land 优先')" >&2
+        _holders >&2
+        _said=1; _t=0
+    fi
+    sleep 2; _t=$((_t + 2))
+done
