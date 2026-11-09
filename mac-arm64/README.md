@@ -69,6 +69,8 @@ git -C ~/.dotfiles pull --ff-only vm develop       # remote vm = jserver:.dotfil
 * **宿主睡眠会挂起 VM**（本机 `pmset sleep 1`）。`jserver-vm` 用
   `caffeinate -i -s -w <UTM pid>` 持断言；只用 `-s` 挡不住闲置睡眠。
   `-i` 在电池下也生效（UTM 开着就不闲置睡），电池下合盖两者都挡不住。
+* **登录自启 2026-11-09 起交给宿主常驻服务 hostd**（vm 服务：登录时起 VM、UTM 在跑就持同样的断言、
+  现成的断言直接沿用）。原来的 LaunchAgent 模板已删，`jserver-vm` 留作手工 stop / suspend / status。下面这条是当时的教训。
 * **LaunchAgent 要带 `AbandonProcessGroup`**——否则脚本退出时 launchd 连 caffeinate 一起杀，
   登录自启从来挂不住断言。2026-10-26 宿主重启后断言丢了 6 天，VM 冻住 48% 的时间
   （另一半原因：登录时 `utmctl status` 为空、脚本判失败提前退出，已改为以 ssh 判活）。

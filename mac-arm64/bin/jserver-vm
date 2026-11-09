@@ -14,6 +14,9 @@
 #    · `--hide` 只管 UTM 主窗口，不保证 VM 显示窗口不出现（见文档 §7）。
 #
 # 用法：jserver-vm {start|stop|suspend|status}
+#
+# 2026-11-09 起登录自启与睡眠断言由宿主常驻服务 hostd 的 vm 服务做（原 LaunchAgent 已撤）；
+# 本脚本留作手工用。手工 start 起的断言与 hostd 的同形（caffeinate -i -s -w <UTM pid>），hostd 会沿用、不重复起。
 
 set -uo pipefail
 UTMCTL=/Applications/UTM.app/Contents/MacOS/utmctl

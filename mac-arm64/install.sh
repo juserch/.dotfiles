@@ -56,19 +56,9 @@ echo "▸ VS Code（拷贝——GUI 改设置会原子重写，软链会被替�
 _copy vscode/settings.json          "$HOME/Library/Application Support/Code/User/settings.json"
 _copy vscode/settings.insiders.json "$HOME/Library/Application Support/Code - Insiders/User/settings.json"
 
-echo "▸ LaunchAgent（模板渲染——plist 里是绝对路径，换机即废）"
-PLIST="$HOME/Library/LaunchAgents/com.juserch.jserver-vm.plist"
-RENDERED=$(mktemp); sed "s|\$HOME|$HOME|g" "$SRC/launchd/com.juserch.jserver-vm.plist.template" > "$RENDERED"
-if [ -f "$PLIST" ] && cmp -s "$RENDERED" "$PLIST"; then
-  n_skip=$((n_skip+1))
-else
-  [ -f "$PLIST" ] && { mkdir -p "$BAK"; cp -p "$PLIST" "$BAK/$(basename "$PLIST")"; }
-  mkdir -p "$(dirname "$PLIST")"; cp "$RENDERED" "$PLIST"; echo "  ⇒ $PLIST"; n_copy=$((n_copy+1))
-fi
-rm -f "$RENDERED"
-plutil -lint "$PLIST" >/dev/null && echo "  plist 合法"
-launchctl print "gui/$(id -u)/com.juserch.jserver-vm" >/dev/null 2>&1 \
-  || { launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null && echo "  已注册开机自启"; }
+# VM 登录自启 + 睡眠断言 2026-11-09 起由宿主常驻服务 hostd 的 vm 服务做（hostd agent install 会卸掉
+# 原先这里渲染的 LaunchAgent com.juserch.jserver-vm）。⛔ 别再在这里注册：两边都起会抢着拉 VM。
+echo "▸ VM 登录自启：交给 hostd（hostd status 看 vm 一行），这里不再注册 LaunchAgent"
 
 echo "▸ 系统设置"
 "$SRC/macos-defaults.sh" | sed 's/^/  /'

@@ -56,6 +56,6 @@ cat <<'NOTE'
 ▸ 需手工处理的两项（脚本不碰）：
   1. VM 无窗口化：UTM 容器里的 Linux.utm/config.plist 要 Display=[] + Serial=[{Mode:Ptty}]
      不入库——含 VM UUID 与磁盘路径，属机器本地状态。改法见 assessment §7.5。
-  2. 宿主自动睡眠是 pmset sleep 1，会把 VM 挂起。对策是 jserver-vm 里的
-     caffeinate -i -s -w <UTM pid>（断言绑 UTM 生命周期），不改全局电源策略。
+  2. 宿主自动睡眠是 pmset sleep 1，会把 VM 挂起。对策是 caffeinate -i -s -w <UTM pid>
+     （断言绑 UTM 生命周期），不改全局电源策略；2026-11-09 起由 hostd 的 vm 服务持有。
 NOTE
