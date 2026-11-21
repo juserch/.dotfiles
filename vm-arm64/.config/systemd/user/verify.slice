@@ -1,0 +1,23 @@
+[Unit]
+Description=Verifier rounds and post-merge full checks: CPU priority over builds and interactive work, own memory budget (see scripts/verifier-runner.sh, issues_verifier/postmerge.py)
+
+[Slice]
+# 为什么单独一个 slice（Issue 01M7XTHX，D-PM-200：验证器优先）：
+#   cgroup v2 的权重只在同一个 slice 内的兄弟之间比较。验证器原来住在 build.slice（权重 20）里，
+#   即使 scope 自己设了 1000，也只是在 build.slice 内部排序；它在用户实例里的份额由 build.slice 的 20 决定。
+#   verify.slice 是 build.slice 的兄弟，和 app.slice / session.slice 直接比较。
+# 单元文件必须真实存在：只出现在 --slice= 里的 slice 会被 systemd 隐式创建（权重 100、无上限），
+#   两个启动器（verifier-runner.sh、postmerge.py）因此会先问 FragmentPath，没有就回退 build.slice 并告警。
+# CPU：权重由 §4 的测量定（占位符未替换时装不上）。
+CPUWeight=1000
+# 内存（Program 决定，D-PM-200）：Max 9G = 重候选一轮 6.2G + 一个 post-merge 工作进程 3G；
+#   High 8G 先限速再杀；Low 4G 是回收时的保护。
+#   ⚠️ Low 只有在所有祖先（user.slice、user-1000.slice、user@1000.service）也设了 MemoryLow 才生效，
+#   那是 root 操作，需要 Owner 做；在那之前这一行只是声明，不是保护。
+MemoryHigh=8G
+MemoryMax=9G
+MemoryLow=4G
+# swap 只给 2G：和 build.slice 同一理由，防止占满 8G swap 后别人的页换不出去
+MemorySwapMax=2G
+# 不设 IOWeight：用户实例没有 io 控制器，设了不起作用，只会看起来像一个保证。
+# 回滚：VELTORA_VERIFIER_SLICE=build.slice（一行环境变量），或拆掉 ~/.config/systemd/user/verify.slice 链接。
