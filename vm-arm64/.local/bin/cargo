@@ -78,7 +78,14 @@ mkdir -p "$_dir" 2>/dev/null || { _mark_acquired; exec "$@"; }    # 建不了目
 _slots() {
     [ -n "${VM_BUILD_SLOTS:-}" ] && { echo "$VM_BUILD_SLOTS"; return; }
     read -r _w _rest < /data/infra/llm-window 2>/dev/null || _w=
-    if [ "$_w" = open ]; then echo 1; else echo 2; fi
+    if [ "$_w" = open ]; then echo 1; return; fi
+    # Verifier priority (Owner-approved capacity rule, 2026-11-21): while a verification attempt runs, developer
+    # builds share ONE slot, so the candidate everyone waits on is not starved (three 3600 s timeouts that day).
+    # Running builds are never preempted; only new admissions see the lower count. VM_BUILD_VERIFY_PROBE overrides
+    # the probe for tests.
+    if [ -n "${VM_BUILD_VERIFY_PROBE:-}" ]; then _v=$VM_BUILD_VERIFY_PROBE
+    else _v=$(systemctl --user list-units --state=active --no-legend --plain 'veltora-verify-*' 2>/dev/null | head -1); fi
+    if [ -n "$_v" ] && [ "$_v" != none ]; then echo 1; else echo 2; fi
 }
 _land_waiting() {    # 有活着的 land 在等就返回 0
     for _m in "$_dir"/land-wait.*; do
