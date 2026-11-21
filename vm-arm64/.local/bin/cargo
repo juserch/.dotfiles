@@ -36,7 +36,9 @@ _mark_acquired() {
 #   被记成红，把一次只改文档的落地整组回滚。它们和构建抢 5G 没有任何好处。
 _sub=${1:-}; case "$_sub" in +*) _sub=${2:-} ;; esac
 case "$_sub" in
-    metadata|tree|locate-project|pkgid|read-manifest|verify-project|version|help|-V|--version|-h|--help)
+    # deny (cargo-deny) reads metadata and the advisory db; it never compiles, so it does not take a build slot
+    # (Program 2026-11-21: a queued `cargo deny` waited 40+ min behind compiles inside a pre-commit hook).
+    metadata|tree|locate-project|pkgid|read-manifest|verify-project|version|help|-V|--version|-h|--help|deny)
         _mark_acquired; exec "$REAL" "$@" ;;
 esac
 # 嵌套调用（已在 build.slice 里）：不进组、不排队，否则自己等自己。
