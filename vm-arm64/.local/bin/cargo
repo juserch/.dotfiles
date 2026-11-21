@@ -36,10 +36,16 @@ _mark_acquired() {
 #   被记成红，把一次只改文档的落地整组回滚。它们和构建抢 5G 没有任何好处。
 _sub=${1:-}; case "$_sub" in +*) _sub=${2:-} ;; esac
 case "$_sub" in
-    # deny (cargo-deny) reads metadata and the advisory db; it never compiles, so it does not take a build slot
-    # (Program 2026-11-21: a queued `cargo deny` waited 40+ min behind compiles inside a pre-commit hook).
-    metadata|tree|locate-project|pkgid|read-manifest|verify-project|version|help|-V|--version|-h|--help|deny)
+    metadata|tree|locate-project|pkgid|read-manifest|verify-project|version|help|-V|--version|-h|--help)
         _mark_acquired; exec "$REAL" "$@" ;;
+    # cargo-deny runs `cargo fetch` + `cargo metadata` (via $CARGO) and scans licenses/advisories in-process;
+    # it never compiles, so it takes no build slot (Program 2026-11-21: a queued deny waited 40+ min in a hook).
+    # It is exec'd directly, not through cargo, so a cargo alias named `deny` cannot turn this exemption into an
+    # unqueued build. Only `cargo deny ...` / `cargo +tc deny ...` match; put global flags after `deny`.
+    deny)
+        case "${1:-}" in +*) shift ;; esac
+        CARGO=$REAL; export CARGO
+        _mark_acquired; exec "${REAL%/cargo}/cargo-deny" "$@" ;;
 esac
 # 嵌套调用（已在 build.slice 里）：不进组、不排队，否则自己等自己。
 [ -n "${VM_BUILD_SLICE:-}" ] && { _mark_acquired; exec "$REAL" "$@"; }
