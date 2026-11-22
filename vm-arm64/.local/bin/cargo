@@ -1,144 +1,25 @@
 #!/bin/sh
 # veltora-slot-protocol: 1
-# cargo —— 把每次构建放进 build.slice，和 VS Code server 隔开（PATH 里排在 ~/.cargo/bin 前面）
-#
-# 能力查询（2026-11-08，veltora Issue 01M6XNJ6）：`cargo --veltora-slot-protocol` 打印协议版本后以 0 退出，
-#   不排队、不进 build.slice、不调用真 cargo。上面那行注释与它同值，⛔ 改脚本时两处一起留着、一起改。
-#   版本 1 = CARGO_SLOT_ACQUIRED_FILE 现在的语义（5 个启动点写 Unix 秒、只认第一次、写失败不影响构建）；语义一变就升版本。
+# Non-compiling commands run directly; every heavy command uses the canonical queue.
 [ "${1:-}" = --veltora-slot-protocol ] && { echo 1; exit 0; }
-#
-# 为什么（2026-10-16 实测）：构建和 VS Code server 原本在同一个 ssh 会话 cgroup 里，
-#   cargo 默认按核数并行，10 个 ld 加 10 个 rustc 一起跑，CPU 和内存同时被打满，
-#   VS Code server 被饿到发不出心跳，窗口断线、Reload 卡住；还引发全局 OOM，杀掉了 prometheus。
-# 怎么做：systemd-run --user --scope 原地执行真正的 cargo（同一个进程，环境、目录、输入输出、
-#   退出码、信号都不变），rustc / ld 作为子进程自动进同一个组。
-#   build.slice 的限额在 ~/.config/systemd/user/build.slice。OOMPolicy=kill：组内一旦 OOM，
-#   这一次 cargo 调用的所有进程一起结束（否则 cargo 会等其余链接器跑完，内存继续被占着）。
-# 兜底：systemd 用户实例连不上，或已经在 build.slice 里（嵌套调用），就直接执行真正的 cargo。
 REAL=${VM_BUILD_REAL:-"$HOME/.cargo/bin/cargo"}
-# 并行度默认 4（和各仓门禁、branch-model.sh 的 CARGO_BUILD_JOBS=4 一致）。
-#   为什么（2026-10-29 01:00 UTC 实测）：门禁里设了 4，但直接敲的 cargo test 不经过门禁，cargo 按核数开 10 路，
-#   一次 cargo test -p veltora-code-coding-core 同时跑 10 个链接（每个约 800M），build.slice 顶到 9G，
-#   全机 memory PSI some avg60 50%、full 30%，swap 用光。调用方自己设了 CARGO_BUILD_JOBS 或传 -j 时仍以调用方为准。
-: "${CARGO_BUILD_JOBS:=4}"; export CARGO_BUILD_JOBS
-# 「拿到名额」信号（2026-11-08，veltora Issue 01M6XMHC）：设了 CARGO_SLOT_ACQUIRED_FILE，就在真正的 cargo 开跑那一刻
-#   往这个文件写 Unix 秒数 —— 下面每一条通往真 cargo 的路都要写，否则调用方会一直等。
-#   为什么：veltora 门禁用 timeout 给每次 cargo 计预算，排队时间被算进去，UAT 窗口里只有 1 个名额，
-#   几个 land 排起队来 600 秒的预算被等光，报成测试挂住（假红）。调用方见到文件才开始计时。
-#   只认第一次（set -C 不覆盖）：变量会传给嵌套调用，嵌套的不能改掉外层拿到名额的时间。写失败不影响构建。
+: "${CARGO_BUILD_JOBS:=2}"; export CARGO_BUILD_JOBS
 _mark_acquired() {
     [ -n "${CARGO_SLOT_ACQUIRED_FILE:-}" ] && ( set -C; printf '%s\n' "$(date +%s)" > "$CARGO_SLOT_ACQUIRED_FILE" ) 2>/dev/null
     return 0
 }
-# 只读子命令不进 build.slice：它们不编译，实测 metadata/tree 约 100M、0.1–0.2 秒。
-#   为什么（2026-11-06 实测，Issue 01M6RB14）：门禁里的 cargo metadata / cargo tree 原本也被放进 build.slice，
-#   并发构建把它顶满（memory.events max 8770 万次、oom_kill 204），它们卡在组内回收里 120–900 秒后超时，
-#   被记成红，把一次只改文档的落地整组回滚。它们和构建抢 5G 没有任何好处。
 _sub=${1:-}; case "$_sub" in +*) _sub=${2:-} ;; esac
 case "$_sub" in
     metadata|tree|locate-project|pkgid|read-manifest|verify-project|version|help|-V|--version|-h|--help)
         _mark_acquired; exec "$REAL" "$@" ;;
-    # cargo-deny runs `cargo fetch` + `cargo metadata` (via $CARGO) and scans licenses/advisories in-process;
-    # it never compiles, so it takes no build slot (Program 2026-11-21: a queued deny waited 40+ min in a hook).
-    # It is exec'd directly, not through cargo, so a cargo alias named `deny` cannot turn this exemption into an
-    # unqueued build. Only `cargo deny ...` / `cargo +tc deny ...` match; put global flags after `deny`.
     deny)
         case "${1:-}" in +*) shift ;; esac
         CARGO=$REAL; export CARGO
         _mark_acquired; exec "${REAL%/cargo}/cargo-deny" "$@" ;;
-esac
-# 嵌套调用（已在 build.slice 里）：不进组、不排队，否则自己等自己。
-[ -n "${VM_BUILD_SLICE:-}" ] && { _mark_acquired; exec "$REAL" "$@"; }
-if command -v systemd-run >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
-    set -- systemd-run --user --scope --quiet --collect --slice=build.slice -p OOMPolicy=kill -- "$REAL" "$@"
-    export VM_BUILD_SLICE=1
-else
-    set -- "$REAL" "$@"
-fi
-# 不编译的子命令不排队，直接跑。
-case "$_sub" in
     fmt|clean|update|fetch|generate-lockfile|add|remove|search|login|logout|owner|yank|config|info|report|init|new)
-        _mark_acquired; exec "$@" ;;
+        _mark_acquired; exec "$REAL" "$@" ;;
 esac
-
-# 构建排队：同时最多 2 个构建，本地大模型窗口开着时 1 个；land 优先。
-#   为什么（2026-11-08，ienv/ci/README.md §10 第 2 条，veltora 同意）：所有构建共用 build.slice 的 9G（窗口 5G），
-#   10-26 起被 OOM 结束累计 327 次 —— 并发靠 OOM 限流，结束一次就白编一次。
-#   名额：窗口信号 /data/infra/llm-window 第一个词是 open 时 1 个，否则 2 个（VM_BUILD_SLOTS 可覆盖，测试用）。
-#   land 优先：带 VELTORA_LAND_GATE=1 的调用（veltora 的单仓与批量合入，门禁里的 cargo 都继承它）排队时留一个标记，
-#     有 land 在等，别的调用就不去抢空出来的名额。不抢占：land 仍要等正在跑的构建结束。
-#   锁：flock 加在名额文件上，由本脚本持有；真正的 cargo 启动时关掉这个 fd（9>&-），
-#     构建里起的常驻进程带不走锁。本脚本留在前台等 cargo 结束并转发信号，timeout / kill 打在本脚本上 cargo 也会结束。
-_dir=${VM_BUILD_SLOT_DIR:-}
-if [ -z "$_dir" ]; then
-    if [ -d "/run/user/$(id -u)" ]; then _dir=/run/user/$(id -u)/cargo-slots; else _dir=/tmp/cargo-slots-$(id -u); fi
-fi
-mkdir -p "$_dir" 2>/dev/null || { _mark_acquired; exec "$@"; }    # 建不了目录就不排队，别让构建跑不起来
-
-_slots() {
-    [ -n "${VM_BUILD_SLOTS:-}" ] && { echo "$VM_BUILD_SLOTS"; return; }
-    read -r _w _rest < /data/infra/llm-window 2>/dev/null || _w=
-    if [ "$_w" = open ]; then echo 1; return; fi
-    # Verifier priority (Owner-approved capacity rule, 2026-11-21): while a verification attempt runs, developer
-    # builds share ONE slot, so the candidate everyone waits on is not starved (three 3600 s timeouts that day).
-    # Running builds are never preempted; only new admissions see the lower count. VM_BUILD_VERIFY_PROBE overrides
-    # the probe for tests.
-    if [ -n "${VM_BUILD_VERIFY_PROBE:-}" ]; then _v=$VM_BUILD_VERIFY_PROBE
-    else _v=$(systemctl --user list-units --state=active --no-legend --plain 'veltora-verify-*' 2>/dev/null | head -1); fi
-    if [ -n "$_v" ] && [ "$_v" != none ]; then echo 1; else echo 2; fi
-}
-_land_waiting() {    # 有活着的 land 在等就返回 0
-    for _m in "$_dir"/land-wait.*; do
-        [ -e "$_m" ] || continue
-        kill -0 "${_m##*.}" 2>/dev/null && return 0
-        rm -f "$_m"
-    done
-    return 1
-}
-_holders() {
-    for _f in "$_dir"/slot-*.who; do
-        [ -e "$_f" ] || continue
-        read -r _p _rest < "$_f" 2>/dev/null || continue
-        kill -0 "$_p" 2>/dev/null && printf '  %s\n' "$_rest"
-    done
-}
-_run() {    # $1 = 名额文件；拿到锁就跑并以 cargo 的退出码结束本脚本，拿不到返回 1
-    _slot=$1; shift
-    exec 9>>"$_slot"
-    if ! flock -n 9; then exec 9>&-; return 1; fi
-    rm -f "$_dir/land-wait.$$"
-    printf '%s %s %s  %s\n' "$$" "$(date -u +%H:%M:%SZ)" "${VELTORA_LAND_GATE:+[land] }$(pwd)" "cargo $_sub" > "$_slot.who"
-    _mark_acquired
-    # 后台命令的 stdin 会先被换成 /dev/null（没有作业控制时 POSIX 的规定），所以从 fd 8 还原
-    "$@" 0<&8 8<&- 9>&- &
-    _child=$!
-    trap 'kill -s TERM "$_child" 2>/dev/null' TERM HUP
-    trap 'kill -s INT "$_child" 2>/dev/null' INT
-    while :; do
-        wait "$_child"; _rc=$?
-        kill -0 "$_child" 2>/dev/null || break
-    done
-    exit "$_rc"
-}
-
-exec 8<&0
-_land=; [ "${VELTORA_LAND_GATE:-}" = 1 ] && _land=1
-[ -n "$_land" ] && : > "$_dir/land-wait.$$" && trap 'rm -f "$_dir/land-wait.$$"; exit 130' INT TERM HUP
-_said=0; _t=0
-while :; do
-    _n=$(_slots)
-    if [ -n "$_land" ] || ! _land_waiting; then
-        _i=1
-        while [ "$_i" -le "$_n" ]; do
-            _run "$_dir/slot-$_i" "$@"
-            _i=$((_i + 1))
-        done
-    fi
-    if [ "$_said" = 0 ] || [ "$_t" -ge 60 ]; then
-        printf 'cargo: 排队等构建名额（共 %s 个%s%s），正在跑：\n' "$_n" \
-            "$([ "$_n" = 1 ] && echo '，本地大模型窗口开着')" "$([ -n "$_land" ] && echo '，land 优先')" >&2
-        _holders >&2
-        _said=1; _t=0
-    fi
-    sleep 2; _t=$((_t + 2))
-done
+# A caller-set VM_BUILD_SLICE is never proof of an inherited lease. Only the
+# canonical helper validates its locked descriptor, nonce and kernel scope.
+_ADMISSION=${VM_BUILD_ADMISSION:-"$(dirname -- "$0")/veltora-admission"}
+exec "$_ADMISSION" run --class P2 -- "$REAL" "$@"
