@@ -1,0 +1,9 @@
+#!/usr/bin/python3 -I
+"""Delegate to the canonical scheduler, independent of a private caller HOME."""
+import os
+import pwd
+import sys
+from pathlib import Path
+
+source = Path(pwd.getpwuid(os.getuid()).pw_dir) / ".veltora/ops/scripts/host-admission.py"
+os.execv("/usr/bin/python3", ["/usr/bin/python3", "-I", str(source), *sys.argv[1:]])

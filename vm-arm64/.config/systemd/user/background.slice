@@ -1,0 +1,10 @@
+[Unit]
+Description=Background CI, nightly and artifact work; one admitted task at a time
+
+[Slice]
+CPUWeight=1
+MemoryHigh=7G
+MemoryMax=8G
+MemorySwapMax=1G
+# The admission launcher applies SCHED_IDLE, ionice idle and OOM score 900.
+# Admission pauses for active/queued P1 or high pressure; running work is not suspended.
