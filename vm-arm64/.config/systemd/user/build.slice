@@ -14,3 +14,5 @@ MemoryMax=9G
 MemorySwapMax=2G
 # CPU：和用户实例里的其他组争抢时让出；与 VS Code 的隔离主要靠「不在同一个 cgroup」
 CPUWeight=20
+# CPU 硬上限 6 vCPU（2026-11-24，veltora 定值）：运行时 set-property 会被 VM 重启和关窗 revert 清掉，所以写进单元文件
+CPUQuota=600%
